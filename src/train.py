@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import dgl
+from attack.attack import attack
 
 from utils import *
 
@@ -53,7 +54,7 @@ parser.add_argument('--hidden', type=int, default=64,
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
 parser.add_argument('--attack_type', type=str, default='none',
-                    choices=['rand', 'meta', 'none'],
+                    choices=['none', 'random', 'dice', 'metattack'],
                     help='Adversarial attack type.')
 parser.add_argument("--num_layers", type=int, default=2,
                     help="number of hidden layers")
@@ -204,14 +205,17 @@ for repeat in range(N):
 
     # could add a step to extract LCC as adj-----TBD
 
-    if args.attack_type == 'rand':  # for random attack
-        edge_perturbations = 0.25  # % edges to pertubate
-        adj = rand_attack(adj, edge_perturbations)
-    elif args.attack_type == 'meta':  # for meta attack, it extracts LCC so the whole graph changes, need reload
-        if args.dataset == 'nba':  # one dataset of nba as example, the rest data not uploaded
-            adj, features, labels, idx_train, idx_val, idx_test, sens = load_attacked_graph()
-        else:
-            print("Attacked graph not found!")
+    # if args.attack_type == 'rand':  # for random attack
+    #     edge_perturbations = 0.25  # % edges to pertubate
+    #     adj = rand_attack(adj, edge_perturbations)
+    # elif args.attack_type == 'meta':  # for meta attack, it extracts LCC so the whole graph changes, need reload
+    #     if args.dataset == 'nba':  # one dataset of nba as example, the rest data not uploaded
+    #         adj, features, labels, idx_train, idx_val, idx_test, sens = load_attacked_graph()
+    #     else:
+    #         print("Attacked graph not found!")
+
+    if args.attack_type != 'none':
+        adj = attack(args.attack_type, 0.05, adj, features, labels, sens, idx_train, idx_val, idx_test, seed)
 
     print("Test samples:", len(idx_test))
     if sens_attr:
