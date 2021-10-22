@@ -1,4 +1,5 @@
 from deeprobust.graph.global_attack import DICE, Random, Metattack
+from attack.sacide import SACIDE
 from deeprobust.graph.utils import normalize_adj, sparse_mx_to_torch_sparse_tensor, preprocess, to_scipy
 from deeprobust.graph.defense import GCN
 import scipy.sparse as sp
@@ -13,15 +14,23 @@ def build_random(adj=None, features=None, labels=None, idx_train=None, device=No
 def build_dice(adj=None, features=None, labels=None, idx_train=None, device=None):
     return DICE()
 
+def build_sacide(adj=None, features=None, labels=None, idx_train=None, device=None):
+    return SACIDE()
 
-def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled):
+def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
 
 
-def attack_dice(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled):
+def attack_dice(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, labels, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_sacide(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, sens, n_perturbations)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
 
@@ -48,10 +57,6 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
 
     device = torch.device("cuda" if cuda else "cpu")
 
-    #     features, labels = features.cpu().numpy(), labels.cpu().numpy()
-    #     idx_train = idx_train.cpu().numpy()
-    #     idx_val = idx_val.cpu().numpy()
-    #     idx_test = idx_test.cpu().numpy()
     idx_unlabeled = np.union1d(idx_val, idx_test)
 
     n_perturbations = int(ptb_rate * (adj.sum() // 2))
@@ -65,8 +70,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
     model = model_builder(adj, features, labels, idx_train, device)
 
     # perform the attack
-    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled)
-    #     modified_adj = modified_adj.to(device)
+    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
     return modified_adj
 
 
@@ -78,20 +82,17 @@ def build_metattack(adj=None, features=None, labels=None, idx_train=None, device
                     dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
     surrogate = surrogate.to(device)
     surrogate.fit(features, adj, labels, idx_train)
-    # print(torch.cuda.current_device())
     print(f'{torch.cuda.device_count()} GPUs available')
     print('built surrogate')
     model = Metattack(model=surrogate, nnodes=adj.shape[0], feature_shape=features.shape,
                       attack_structure=True, attack_features=False, device=device, lambda_=lambda_, lr=0.005)
     print('built model')
-    # if adj.shape[0] > 12000:
-    #      model = nn.DataParallel(model)
     model = model.to(device)
     print('to device')
     return model
 
 
-def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled):
+def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(features, adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
     return to_scipy(model.modified_adj)
 
@@ -112,8 +113,8 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     :return: perturbed graph (scipy_sparse)
     """
     print(f'Applying {attack_name} attack to input graph')
-    builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack}
-    attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack}
+    builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide':build_sacide}
+    attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide':attack_sacide}
 
     modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], adj, features, labels, sens, idx_train,
                                       idx_val, idx_test, ptb_rate=ptb_rate, seed=seed)

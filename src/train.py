@@ -5,7 +5,6 @@ import argparse
 import numpy as np
 # import scipy.sparse as sp
 from random import choice
-import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -54,8 +53,10 @@ parser.add_argument('--hidden', type=int, default=64,
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
 parser.add_argument('--attack_type', type=str, default='none',
-                    choices=['none', 'random', 'dice', 'metattack'],
+                    choices=['none', 'random', 'dice', 'metattack', 'sacide'],
                     help='Adversarial attack type.')
+parser.add_argument('--ptb_rate', type=float, default=0.05,
+                    help="Attack perturbation rate [0-1]")
 parser.add_argument("--num_layers", type=int, default=2,
                     help="number of hidden layers")
 parser.add_argument('--agg_type', type=str, default='mean',
@@ -215,7 +216,7 @@ for repeat in range(N):
     #         print("Attacked graph not found!")
 
     if args.attack_type != 'none':
-        adj = attack(args.attack_type, 0.05, adj, features, labels, sens, idx_train, idx_val, idx_test, seed)
+        adj = attack(args.attack_type, args.ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed)
 
     print("Test samples:", len(idx_test))
     if sens_attr:
@@ -455,8 +456,8 @@ fieldnames = [
     'parity',
     'equality',
     'eq_odds']
-fname = 'result-' + str(args.dataset) + '-' + str(args.model) + \
-        '-' + str(args.attack_type) + '.csv'
+fname = '../results/result-' + str(args.dataset) + '-' + str(args.model) + \
+        '-' + str(args.attack_type) + (f'-{args.ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
 with open(fname, 'w', encoding='UTF8', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
@@ -466,6 +467,6 @@ f.close()
 # check loss
 import scipy.io
 
-fname = 'loss-' + str(args.dataset) + '-' + str(args.model) + \
-        '-' + str(args.attack_type) + '.mat'
+fname = '../results/loss-' + str(args.dataset) + '-' + str(args.model) + \
+        '-' + str(args.attack_type) + (f'-{args.ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.mat'
 scipy.io.savemat(fname, mdict={'loss': loss_all})
