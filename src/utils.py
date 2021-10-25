@@ -8,6 +8,7 @@ import dgl
 import random
 from sklearn.metrics import accuracy_score, roc_auc_score, recall_score, f1_score, precision_score, roc_curve
 from scipy.spatial import distance_matrix
+import networkx as nx
 
 try:
     from tqdm import tqdm
@@ -189,6 +190,49 @@ def load_pokec(
     # random.shuffle(sens_idx)
 
     return adj, features, labels, idx_train, idx_val, idx_test, sens  # ,idx_sens_train
+
+
+def preprocess_pokec_complete_accounts(adj, features, labels, sens):
+    """
+    Pre-processes Pokec dataset by retaining only complete accounts (accounts where label!=-1).
+    :param adj: original adjacency matrix
+    :param features: original feature matrix
+    :param labels: original labels
+    :param sens: original sensitive attributes
+    :return: The largest connected component in that subgraph with the projected features, labels and sens
+    """
+    idx = np.array(range(labels.shape[0]))[labels != -1]
+    G = nx.from_scipy_sparse_matrix(adj)
+    G = nx.subgraph(G, idx)
+    print(f'Initial subgraph with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges')
+    cc = [c for c in sorted(nx.connected_components(G), key=len, reverse=True)]
+    print(f'{len(cc)} connected components')
+    idx = np.array(sorted(list(cc[0])))
+    idx_map = {x: i for i, x in enumerate(idx)}
+    G = nx.subgraph(G, idx)
+    print(f'Final subgraph with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges')
+    G = nx.relabel_nodes(G, idx_map)
+    adj = nx.to_scipy_sparse_matrix(G)
+    features = features[idx, :]
+    labels = labels[idx]
+    sens = sens[idx]
+
+    idx_all = np.array(range(len(labels)))[labels != -1]
+
+    np.random.seed(2021)
+
+    idx_train = np.random.choice(idx_all, int(features.shape[0] * 0.9), replace=False)
+    idx_all = np.array(list(set(idx_all).difference(set(idx_train))))
+
+    idx_val = np.random.choice(idx_all, int(features.shape[0] * 0.05), replace=False)
+    idx_all = np.array(list(set(idx_all).difference(set(idx_val))))
+    idx_test = idx_all
+
+    print(idx_train.shape)
+    print(idx_val.shape)
+    print(idx_test.shape)
+
+    return adj, features, labels, torch.LongTensor(idx_train), torch.LongTensor(idx_val), torch.LongTensor(idx_test), sens
 
 
 def load_dblp(dataset,

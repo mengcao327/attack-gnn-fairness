@@ -55,6 +55,8 @@ parser.add_argument('--dropout', type=float, default=0.6,
 parser.add_argument('--attack_type', type=str, default='none',
                     # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
+parser.add_argument("--preprocess_pokec", type = bool, default=False,
+                    help="Include only completed accounts in Pokec datasets (only valid when dataset==pokec_n/pokec_z])")
 parser.add_argument('--ptb_rate', type=float, default=0.05,
                     help="Attack perturbation rate [0-1]")
 parser.add_argument("--num_layers", type=int, default=2,
@@ -149,6 +151,11 @@ for repeat in range(N):
                                                                                train_percent=args.train_percent,
                                                                                val_percent=args.val_percent,
                                                                                seed=seed, test_idx=test_idx)
+        if args.preprocess_pokec and 'pokec' in args.dataset:
+            print(f'Preprocessing {dataset}')
+            adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj, features, labels, sens)
+            dataset += '_completed_accounts'
+
         if args.dataset == "nba":
             features = feature_norm(features)
     else:
