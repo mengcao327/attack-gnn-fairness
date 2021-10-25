@@ -53,7 +53,7 @@ parser.add_argument('--hidden', type=int, default=64,
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
 parser.add_argument('--attack_type', type=str, default='none',
-                    choices=['none', 'random', 'dice', 'metattack', 'sacide'],
+                    # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
 parser.add_argument('--ptb_rate', type=float, default=0.05,
                     help="Attack perturbation rate [0-1]")
