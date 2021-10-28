@@ -1,4 +1,5 @@
-from deeprobust.graph.global_attack import DICE, Random, Metattack
+from deeprobust.graph.global_attack import Random, Metattack
+from attack.fast_dice import DICE
 from attack.sacide import SACIDE
 from structack.structack import build_custom
 import structack.node_selection as ns

@@ -42,17 +42,17 @@ class SACIDE(BaseAttack):
 
         n_insert = n_perturbations - n_remove
 
-
         # sample edges to add
-        for i in range(n_insert):
-            # select a node
-            node1 = np.random.randint(ori_adj.shape[0])
-            possible_nodes = [x for x in range(ori_adj.shape[0])
-                              if sens[x] == sens[node1] and modified_adj[x, node1] == 0]
-            # select another node
-            node2 = possible_nodes[np.random.randint(len(possible_nodes))]
-            modified_adj[node1, node2] = 1
-            modified_adj[node2, node1] = 1
+        edges_to_add = []
+        while len(edges_to_add) < n_insert:
+            n_remaining = n_insert - len(edges_to_add)
+            candidate_edges = np.array([np.random.choice(ori_adj.shape[0], n_remaining),
+                                        np.random.choice(ori_adj.shape[0], n_remaining)]).T
+            candidate_edges = [[u, v] for u, v in candidate_edges if sens[u] == sens[v] and modified_adj[u, v] == 0]
+            edges_to_add += candidate_edges
+        edges_to_add = np.array(edges_to_add)
+        modified_adj[edges_to_add[:, 0], edges_to_add[:, 1]] = 1
+        modified_adj[edges_to_add[:, 1], edges_to_add[:, 0]] = 1
 
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
