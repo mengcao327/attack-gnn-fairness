@@ -48,7 +48,8 @@ class SACIDE(BaseAttack):
             n_remaining = n_insert - len(edges_to_add)
             candidate_edges = np.array([np.random.choice(ori_adj.shape[0], n_remaining),
                                         np.random.choice(ori_adj.shape[0], n_remaining)]).T
-            candidate_edges = [[u, v] for u, v in candidate_edges if sens[u] == sens[v] and modified_adj[u, v] == 0]
+            candidate_edges = [[u, v] for u, v in candidate_edges if sens[u] == sens[v]
+                               and modified_adj[u, v] == 0 and u != v]
             edges_to_add += candidate_edges
         edges_to_add = np.array(edges_to_add)
         modified_adj[edges_to_add[:, 0], edges_to_add[:, 1]] = 1
