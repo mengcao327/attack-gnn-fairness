@@ -22,14 +22,16 @@ class GCN(nn.Module):
             GraphConv(
                 in_feats,
                 n_hidden,
-                activation=activation))
+                activation=activation,
+                allow_zero_in_degree=True))
         # hidden layers
         for i in range(n_layers - 1):
             self.layers.append(
                 GraphConv(
                     n_hidden,
                     n_hidden,
-                    activation=activation))
+                    activation=activation,
+                    allow_zero_in_degree=True))
         # output layer
         # self.layers.append(GraphConv(n_hidden, n_classes))
         self.dropout = nn.Dropout(p=dropout)

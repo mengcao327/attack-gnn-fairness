@@ -155,6 +155,35 @@ for model_name in args.model:
                                                                                        seed=seed, test_idx=test_idx)
                 if args.preprocess_pokec and 'pokec' in args.dataset:
                     print(f'Preprocessing {dataset}')
+                    adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj, features, labels, sens)
+                    dataset += '_completed_accounts'
+                elif args.dataset == 'pokec_n':
+                    dataset = 'region_job_2'
+                    sens_attr = "region"
+                    predict_attr = "I_am_working_in_field"
+                    # label_number = 100000
+                    # sens_number = args.sens_number
+                    # seed=20
+                    path = "../dataset/pokec/"
+                    test_idx = False
+                elif args.dataset == 'nba':
+                    dataset = 'nba'
+                    sens_attr = "country"
+                    predict_attr = "SALARY"
+                    # label_number = 200
+                    # sens_number = 50
+                    # seed=20
+                    path = "../dataset/NBA"
+                    test_idx = True
+                adj, features, labels, idx_train, idx_val, idx_test, sens = load_pokec(dataset,
+                                                                                       sens_attr,
+                                                                                       predict_attr,
+                                                                                       path=path,
+                                                                                       train_percent=args.train_percent,
+                                                                                       val_percent=args.val_percent,
+                                                                                       seed=seed, test_idx=test_idx)
+                if args.preprocess_pokec and 'pokec' in args.dataset:
+                    print(f'Preprocessing {dataset}')
                     adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj, features, labels, sens,seed)
                     dataset += '_completed_accounts'
 
