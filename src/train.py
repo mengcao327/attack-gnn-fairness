@@ -22,7 +22,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument(
     '--dataset',
     type=str,
-    default='dblp',
+    default='pokec_z',
     choices=[
         'pokec_z',
         'pokec_n',

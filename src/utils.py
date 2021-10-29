@@ -364,9 +364,6 @@ def load_dblp(dataset,
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
-
-    # random.shuffle(sens_idx)
-
     return adj, features, labels, idx_train, idx_val, idx_test, sens  # ,idx_sens_train
 
 
