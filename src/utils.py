@@ -9,6 +9,7 @@ import random
 from sklearn.metrics import accuracy_score, roc_auc_score, recall_score, f1_score, precision_score, roc_curve
 from scipy.spatial import distance_matrix
 import networkx as nx
+from scipy.sparse.csgraph import connected_components
 
 try:
     from tqdm import tqdm
@@ -25,6 +26,29 @@ def encode_onehot(labels):
                              dtype=np.int32)
     return labels_onehot
 
+def largest_connected_components(adj, n_components=1):
+    """Select the largest connected components in the graph.
+    Parameters
+    ----------
+    adj : gust.SparseGraph
+        Input graph.
+    n_components : int, default 1
+        Number of largest connected components to keep.
+    Returns
+    -------
+    sparse_graph : gust.SparseGraph
+        Subgraph of the input graph where only the nodes in largest n_components are kept.
+    """
+    _, component_indices = connected_components(adj)
+    component_sizes = np.bincount(component_indices)
+    components_to_keep = np.argsort(component_sizes)[::-1][:n_components]  # reverse order to sort descending
+    nodes_to_keep = [
+        idx for (idx, component) in enumerate(component_indices) if component in components_to_keep
+
+
+    ]
+    print("Selecting {0} largest connected components".format(n_components))
+    return nodes_to_keep
 
 def load_data(path="../dataset/cora/", dataset="cora"):
     """Load citation network dataset (cora only for now)"""
@@ -113,6 +137,7 @@ def load_pokec(
         path="../dataset/pokec/",
         train_percent=0.5,
         val_percent=0.25,
+        sens_number=500,
         seed=42,
         test_idx=False):
     """Load data"""
@@ -128,7 +153,7 @@ def load_pokec(
 
     features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
     labels = idx_features_labels[predict_attr].values
-
+    sens = idx_features_labels[sens_attr].values
     # build graph
     idx = np.array(idx_features_labels["user_id"], dtype=str)
     idx_map = {j: i for i, j in enumerate(idx)}
@@ -149,6 +174,15 @@ def load_pokec(
     # this operation will make the adj symmetric and some redundant edges in
     # original data will have no influence
 
+    # extract largested connected components
+    _adj = adj.tocsr()
+    lcc = largest_connected_components(_adj)
+    _A = _adj[lcc][:, lcc]
+    features = features[lcc]
+    labels = labels[lcc]
+    sens = sens[lcc]
+    adj = _A.tocoo()
+    print(f"{adj.shape[0]} of nodes after selecting LCC")
     # features = normalize(features)
     # so the true number of edges should be (nnz-selfloop)/2 in adj
     adj = adj + sp.eye(adj.shape[0])
@@ -172,16 +206,16 @@ def load_pokec(
             (train_percent + val_percent) * len(label_idx)):]
 
     labels[labels > 1] = 1
-    sens = idx_features_labels[sens_attr].values
+
 
     sens_idx = set(np.where(sens >= 0)[0])
     print("num nodes with sa:", len(sens_idx))
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
     sens = torch.FloatTensor(sens)
-    # idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
-    # random.seed(seed)
-    # random.shuffle(idx_sens_train)
-    # idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
+    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
+    random.seed(seed)
+    random.shuffle(idx_sens_train)
+    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
 
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
@@ -189,10 +223,10 @@ def load_pokec(
 
     # random.shuffle(sens_idx)
 
-    return adj, features, labels, idx_train, idx_val, idx_test, sens  # ,idx_sens_train
+    return adj, features, labels, idx_train, idx_val, idx_test, sens,idx_sens_train
 
 
-def preprocess_pokec_complete_accounts(adj, features, labels, sens):
+def preprocess_pokec_complete_accounts(adj, features, labels, sens,seed):
     """
     Pre-processes Pokec dataset by retaining only complete accounts (accounts where label!=-1).
     :param adj: original adjacency matrix
@@ -217,9 +251,10 @@ def preprocess_pokec_complete_accounts(adj, features, labels, sens):
     labels = labels[idx]
     sens = sens[idx]
 
+
     idx_all = np.array(range(len(labels)))[labels != -1]
 
-    np.random.seed(2021)
+    np.random.seed(seed)
 
     idx_train = np.random.choice(idx_all, int(features.shape[0] * 0.9), replace=False)
     idx_all = np.array(list(set(idx_all).difference(set(idx_train))))
@@ -240,61 +275,19 @@ def load_dblp(dataset,
               predict_attr,
               path="../dataset/dblp/",
               label_num=100,
+              sens_number=200,
               seed=42):
     """Load data"""
     print('Loading {} dataset from {}'.format(dataset, path))
 
     idx_features_labels = pd.read_csv(
         os.path.join(path, "{}.csv".format(dataset)))
-    header = list(idx_features_labels.columns)
-    header.remove("index")
-
-    header.remove(sens_attr)
-    header.remove(predict_attr)
 
     # features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
     # features=np.load(os.path.join(path, "{}_emb.npy".format(dataset)))
     features = sp.load_npz(os.path.join(path, "{}_csr_emb.npz".format(dataset)))
+
     labels = idx_features_labels[predict_attr].values
-
-    # build graph
-    idx = np.array(idx_features_labels["index"], dtype=int)
-    idx_map = {j: i for i, j in enumerate(idx)}
-    edges_unordered = np.genfromtxt(
-        os.path.join(
-            path,
-            "{}_relationship.txt".format(dataset)),
-        dtype=int)
-
-    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
-                     dtype=int).reshape(edges_unordered.shape)
-    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]),
-                        dtype=np.float32)
-    # build symmetric adjacency matrix
-    # the original edges has some redundancy
-    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
-    # this operation will make the adj symmetric and some redundant edges in
-    # original data will have no influence
-
-    # features = normalize(features)
-    # so the true number of edges should be (nnz-selfloop)/2 in adj
-    adj = adj + sp.eye(adj.shape[0])
-
-    features = torch.FloatTensor(np.array(features.todense()))
-    labels = torch.LongTensor(labels)
-    # adj = sparse_mx_to_torch_sparse_tensor(adj)
-
-    random.seed(seed)
-    label_idx = np.where(labels > 0)[0]
-    random.shuffle(label_idx)
-    print("num labels:", len(label_idx))
-
-    idx_train = label_idx[:min(int(0.5 * len(label_idx)), label_num)]
-    idx_val = label_idx[int(0.5 * len(label_idx)):int(0.75 * len(label_idx))]
-    idx_test = label_idx[int(0.75 * len(label_idx)):]
-
-    labels[labels > 1] = 0  # 1:database 0: DM,IR,ML combined
 
     # Sensitive Attribute
     idx_features_labels['gender'][idx_features_labels['gender']
@@ -302,23 +295,79 @@ def load_dblp(dataset,
     idx_features_labels['gender'][idx_features_labels['gender'] == 'm'] = 0
     idx_features_labels['gender'][idx_features_labels['gender'] == 'none'] = -1
     sens = idx_features_labels[sens_attr].values.astype(int)
+
+    # build graph
+    idx = np.array(idx_features_labels["index"], dtype=int)
+    idx_map = {j: i for i, j in enumerate(idx)}
+    # edges_unordered = np.genfromtxt(
+    #     os.path.join(
+    #         path,
+    #         "{}_relationship.txt".format(dataset)),
+    #     dtype=str)
+    edges_unordered = np.genfromtxt(
+        f'{path}{dataset}_relationship.txt').astype('int')
+    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
+                     dtype=int).reshape(edges_unordered.shape)
+    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
+                        shape=(labels.shape[0], labels.shape[0]),
+                        dtype=np.float32)
+    # build symmetric adjacency matrix
+    # the original edges has some redundancy
+
+    # extract largested connected components
+    _adj=adj.tocsr()
+    lcc=largest_connected_components(_adj)
+    _A = _adj[lcc][:, lcc]
+    features=features[lcc]
+    labels=labels[lcc]
+    sens=sens[lcc]
+    adj=_A.tocoo()
+
+    print(f"{adj.shape[0]} of nodes after selecting LCC")
+    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    # this operation will make the adj symmetric and some redundant edges in
+    # original data will have no influence
+
+    # features = normalize(features)
+    # so the true number of edges should be (nnz-selfloop)/2 in adj
+
+    # np.where(sum(features[:])==0) ==> 2492,2527,2521,2529 columns with all zeros and columns after 2492 are very sparse
+    # eliminate them since normalization over all zeros will generate NAN
+    features=features[:,:2491]
+    adj = adj + sp.eye(adj.shape[0])
+    random.seed(seed)
+    features = torch.FloatTensor(np.array(features.todense()))
+    # features= torch.FloatTensor(np.random.random((adj.shape[0],1000)))
+    labels = torch.LongTensor(labels)
+    # adj = sparse_mx_to_torch_sparse_tensor(adj)
+
+
+    label_idx = np.where(labels > 0)[0]
+    random.shuffle(label_idx)
+    print("num labels:", len(label_idx))
+
+    idx_train = label_idx[:min(int(0.3 * len(label_idx)), label_num)]
+    idx_val = label_idx[int(0.3 * len(label_idx)):int(0.6 * len(label_idx))]
+    idx_test = label_idx[int(0.6 * len(label_idx)):]
+
+    labels[labels ==0] = -1
+    labels[labels > 1] = 0  # 1:database 0: DM,IR,ML combined
+
+
     sens_idx = set(np.where(sens >= 0)[0])
     print("num nodes with sa:", len(sens_idx))
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
-    idx_val = np.asarray(list(sens_idx & set(idx_val)))
+    # idx_val = np.asarray(list(sens_idx & set(idx_val)))
     sens = torch.FloatTensor(sens)
-    # idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
-    # random.seed(seed)
-    # random.shuffle(idx_sens_train)
-    # idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
+    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
+    random.seed(seed)
+    random.shuffle(idx_sens_train)
+    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
 
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
-
-    # random.shuffle(sens_idx)
-
-    return adj, features, labels, idx_train, idx_val, idx_test, sens  # ,idx_sens_train
+    return adj, features, labels, idx_train, idx_val, idx_test, sens,idx_sens_train
 
 
 def load_attacked_graph(
@@ -547,7 +596,9 @@ def load_credit(
         sens_attr="Age",
         predict_attr="NoDefaultNextMonth",
         path="./dataset/credit/",
-        label_number=1000):
+        label_number=1000,
+        sens_number=200,
+        seed=20):
     # print('Loading {} dataset from {}'.format(dataset, path))
     idx_features_labels = pd.read_csv(
         os.path.join(path, "{}.csv".format(dataset)))
@@ -597,7 +648,7 @@ def load_credit(
     labels = torch.LongTensor(labels)
 
     import random
-    random.seed(20)
+    random.seed(seed)
     label_idx_0 = np.where(labels == 0)[0]
     label_idx_1 = np.where(labels == 1)[0]
     random.shuffle(label_idx_0)
@@ -618,12 +669,17 @@ def load_credit(
         0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
+    sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
+    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
+    random.seed(seed)
+    random.shuffle(idx_sens_train)
+    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
 
-    return adj, features, labels, idx_train, idx_val, idx_test, sens
+    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train
 
 
 def load_bail(
@@ -631,7 +687,9 @@ def load_bail(
         sens_attr="WHITE",
         predict_attr="RECID",
         path="../dataset/bail/",
-        label_number=1000):
+        label_number=1000,
+        sens_number=200,
+        seed=20):
     # print('Loading {} dataset from {}'.format(dataset, path))
     idx_features_labels = pd.read_csv(
         os.path.join(path, "{}.csv".format(dataset)))
@@ -686,7 +744,7 @@ def load_bail(
     labels = torch.LongTensor(labels)
 
     import random
-    random.seed(20)
+    random.seed(seed)
     label_idx_0 = np.where(labels == 0)[0]
     label_idx_1 = np.where(labels == 1)[0]
     random.shuffle(label_idx_0)
@@ -706,12 +764,17 @@ def load_bail(
         0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
+    sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
+    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
+    random.seed(seed)
+    random.shuffle(idx_sens_train)
+    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
 
-    return adj, features, labels, idx_train, idx_val, idx_test, sens
+    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train
 
 
 def load_german(
@@ -719,7 +782,9 @@ def load_german(
         sens_attr="Gender",
         predict_attr="GoodCustomer",
         path="../dataset/german/",
-        label_number=1000):
+        label_number=1000,
+        sens_number=200,
+        seed=20):
     # print('Loading {} dataset from {}'.format(dataset, path))
     idx_features_labels = pd.read_csv(
         os.path.join(path, "{}.csv".format(dataset)))
@@ -775,7 +840,7 @@ def load_german(
     labels = torch.LongTensor(labels)
 
     import random
-    random.seed(20)
+    random.seed(seed)
     label_idx_0 = np.where(labels == 0)[0]
     label_idx_1 = np.where(labels == 1)[0]
     random.shuffle(label_idx_0)
@@ -796,9 +861,14 @@ def load_german(
         0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
+    sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
+    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
+    random.seed(seed)
+    random.shuffle(idx_sens_train)
+    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
 
-    return adj, features, labels, idx_train, idx_val, idx_test, sens
+    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train
