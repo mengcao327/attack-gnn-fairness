@@ -16,6 +16,12 @@ N_author=28702
 n_label=4236
 n_gender=15555
 
+After extracting the largest connected component, and eliminating all-zero and very sparse features:
+N_author=20111
+n_label=3196
+n_gender=11080
+n_feature_dim=2491
+
 gender information is extracted from dataset provided by MOHSEN JADIDI
 
 dblp_csr_emb.npy: author embedding processed from author-term relations.
