@@ -29,7 +29,7 @@ def distance_hungarian_connection(adj, nodes, n_perturbations, dataset_name=None
     graph = nx.from_scipy_sparse_matrix(adj, create_using=nx.Graph)
     rows = nodes[:n_perturbations]
     cols = nodes[n_perturbations:]
-    precomputed_path = f'data/tmp/{dataset_name}_distance.pkl'
+    precomputed_path = f'../dataset/cached_structack/{dataset_name}_distance.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_distance...")
         with open(precomputed_path,'rb') as ff:
@@ -76,7 +76,7 @@ def katz_hungarian_connection(adj, nodes, n_perturbations, threshold=0.000001, n
     graph = nx.from_scipy_sparse_matrix(adj, create_using=nx.Graph)
     rows = nodes[:n_perturbations]
     cols = nodes[n_perturbations:]
-    precomputed_path = f'data/tmp/{dataset_name}_katz.pkl'
+    precomputed_path = f'../dataset/cached_structack/{dataset_name}_katz.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_katz...")
         with open(precomputed_path,'r') as ff:
@@ -123,7 +123,7 @@ def community_hungarian_connection(adj, nodes, n_perturbations, dataset_name=Non
     rows = nodes[:n_perturbations]
     cols = nodes[n_perturbations:]
 
-    precomputed_path = f'data/tmp/{dataset_name}_communities.pkl'
+    precomputed_path = f'../dataset/cached_structack/{dataset_name}_communities.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_communities...")
         with open(precomputed_path,'r') as ff:

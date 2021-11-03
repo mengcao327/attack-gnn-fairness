@@ -9,6 +9,7 @@ from deeprobust.graph.defense import GCN
 import scipy.sparse as sp
 import numpy as np
 import torch
+import os
 
 
 def build_random(adj=None, features=None, labels=None, idx_train=None, device=None):
@@ -103,7 +104,7 @@ def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, i
     return to_scipy(model.modified_adj)
 
 
-def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name=None):
+def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name):
     """
     builds the attack, applies the perturbation
     :param attack_name: random, dice, metattack
@@ -119,6 +120,17 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     :param dataset_name: required only for structack
     :return: perturbed graph (scipy_sparse)
     """
+
+    if not os.path.exists(f'../dataset/cached_attacks/'):
+        os.mkdir(f'../dataset/cached_attacks/')
+
+    cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
+    # check if modified_adj of (dataset_name, attack_name, ptb_rate, seed) are stored
+    if os.path.exists(cached_filename):
+        print(f'Perturbed adjacency matrix already exists at {cached_filename}. Loading...')
+        modified_adj = sp.load_npz(cached_filename)
+        print('Perturbed adjacency matrix loaded successfully!')
+        return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide}
@@ -129,8 +141,12 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
                                           idx_train,
                                           idx_val, idx_test, ptb_rate=ptb_rate, seed=seed)
         print(f'Attack finished, returning perturbed graph')
+        print(f'Storing perturbed adjacency matrix at {cached_filename}.')
+        sp.save_npz(cached_filename, modified_adj)
         return modified_adj
     elif 'structack' in attack_name:
+        if not os.path.exists(f'../dataset/cached_structack/'):
+            os.mkdir('../dataset/cached_structack/')
         selections = {'dg': ns.get_nodes_with_lowest_degree,
                       'pr': ns.get_nodes_with_lowest_pagerank,
                       'ev': ns.get_nodes_with_lowest_eigenvector_centrality,
@@ -144,6 +160,8 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
                                         features, labels, int(ptb_rate * (adj.sum() // 2)), idx_train,
                                         np.union1d(idx_val, idx_test))
         print(f'Attack finished, returning perturbed graph')
+        print(f'Storing perturbed adjacency matrix at {cached_filename}.')
+        sp.save_npz(cached_filename, modified_adj)
         return modified_adj
     else:
         print('attack not recognized')

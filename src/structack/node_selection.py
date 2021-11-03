@@ -63,7 +63,7 @@ def get_nodes_with_lowest_betweenness_centrality(graph, n, dataset_name=None):
 
 
 def get_nodes_with_lowest_closeness_centrality(graph, n, dataset_name=None):
-    precomputed_path = f'data/tmp/{dataset_name}_closeness_centralities.pkl'
+    precomputed_path = f'../dataset/cached_structack/{dataset_name}_closeness_centralities.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_closeness_centralities...")
         with open(precomputed_path,'r') as ff:
@@ -81,7 +81,7 @@ def get_nodes_with_lowest_closeness_centrality(graph, n, dataset_name=None):
 
 
 def get_nodes_with_lowest_pagerank(graph, n, dataset_name=None):
-    precomputed_path = f'data/tmp/{dataset_name}_pageranks.pkl'
+    precomputed_path = f'../dataset/cached_structack/{dataset_name}_pageranks.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_pageranks...")
         with open(precomputed_path,'r') as ff:

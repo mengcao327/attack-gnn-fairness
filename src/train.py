@@ -225,7 +225,7 @@ for model_name in args.model:
                     exit(0)
 
             if args.attack_type != 'none':
-                adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed)
+                adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset)
 
             print("Test samples:", len(idx_test))
             if sens_attr:
