@@ -43,17 +43,27 @@ class SACIDE(BaseAttack):
         n_insert = n_perturbations - n_remove
 
         # sample edges to add
-        edges_to_add = []
-        while len(edges_to_add) < n_insert:
-            n_remaining = n_insert - len(edges_to_add)
+        added_edges = 0
+        while added_edges < n_insert:
+            n_remaining = n_insert - added_edges
+
+            # sample random pairs
             candidate_edges = np.array([np.random.choice(ori_adj.shape[0], n_remaining),
                                         np.random.choice(ori_adj.shape[0], n_remaining)]).T
-            candidate_edges = [[u, v] for u, v in candidate_edges if sens[u] == sens[v]
-                               and modified_adj[u, v] == 0 and u != v]
-            edges_to_add += candidate_edges
-        edges_to_add = np.array(edges_to_add)
-        modified_adj[edges_to_add[:, 0], edges_to_add[:, 1]] = 1
-        modified_adj[edges_to_add[:, 1], edges_to_add[:, 0]] = 1
+
+            # filter out existing edges, and pairs with the different labels
+            candidate_edges = set([(u, v) for u, v in candidate_edges if sens[u] == sens[v]
+                                        and modified_adj[u, v] == 0 and modified_adj[v, u] == 0])
+            candidate_edges = np.array(list(candidate_edges))
+
+            # if none is found, try again
+            if len(candidate_edges) == 0:
+                continue
+
+            # add all found edges to your modified adjacency matrix
+            modified_adj[candidate_edges[:, 0], candidate_edges[:, 1]] = 1
+            modified_adj[candidate_edges[:, 1], candidate_edges[:, 0]] = 1
+            added_edges += candidate_edges.shape[0]
 
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj

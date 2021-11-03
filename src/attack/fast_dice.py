@@ -4,6 +4,7 @@ import scipy.sparse as sp
 from deeprobust.graph.global_attack import BaseAttack
 import time
 
+
 class DICE(BaseAttack):
     """As is described in ADVERSARIAL ATTACKS ON GRAPH NEURAL NETWORKS VIA META LEARNING (ICLR'19),
     'DICE (delete internally, connect externally) is a baseline where, for each perturbation,
@@ -81,30 +82,29 @@ class DICE(BaseAttack):
 
         n_insert = n_perturbations - n_remove
 
-        start_time = time.time()
         # sample edges to add
-        edges_to_add = []
-        while len(edges_to_add) < n_insert:
-            n_remaining = n_insert - len(edges_to_add)
+        added_edges = 0
+        while added_edges < n_insert:
+            n_remaining = n_insert - added_edges
+
+            # sample random pairs
             candidate_edges = np.array([np.random.choice(ori_adj.shape[0], n_remaining),
                                         np.random.choice(ori_adj.shape[0], n_remaining)]).T
-            candidate_edges = [[u, v] for u, v in candidate_edges if labels[u] != labels[v] and modified_adj[u, v] == 0]
-            edges_to_add += candidate_edges
-        edges_to_add = np.array(edges_to_add)
-        modified_adj[edges_to_add[:, 0], edges_to_add[:, 1]] = 1
-        modified_adj[edges_to_add[:, 1], edges_to_add[:, 0]] = 1
 
-        # for i in range(n_insert):
-        #     # select a node
-        #     node1 = np.random.randint(ori_adj.shape[0])
-        #     possible_nodes = [x for x in range(ori_adj.shape[0])
-        #                       if labels[x] != labels[node1] and modified_adj[x, node1] == 0]
-        #     # select another node
-        #     node2 = possible_nodes[np.random.randint(len(possible_nodes))]
-        #     modified_adj[node1, node2] = 1
-        #     modified_adj[node2, node1] = 1
+            # filter out existing edges, and pairs with the different labels
+            candidate_edges = set([(u, v) for u, v in candidate_edges if labels[u] != labels[v]
+                                        and modified_adj[u, v] == 0 and modified_adj[v, u] == 0])
+            candidate_edges = np.array(list(candidate_edges))
 
-        print(f'time elapsed {time.time()-start_time}')
+            # if none is found, try again
+            if len(candidate_edges) == 0:
+                continue
+
+            # add all found edges to your modified adjacency matrix
+            modified_adj[candidate_edges[:, 0], candidate_edges[:, 1]] = 1
+            modified_adj[candidate_edges[:, 1], candidate_edges[:, 0]] = 1
+            added_edges += candidate_edges.shape[0]
+
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
 
