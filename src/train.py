@@ -177,6 +177,7 @@ for model_name in args.model:
             else:
                 # Load credit_scoring dataset
                 if args.dataset == 'credit':
+                    dataset = 'credit'
                     sens_attr = "Age"  # column number after feature process is 1
                     sens_idx = 1
                     predict_attr = 'NoDefaultNextMonth'
@@ -191,6 +192,7 @@ for model_name in args.model:
 
                 # Load german dataset
                 elif args.dataset == 'german':
+                    dataset = 'german'
                     sens_attr = "Gender"  # column number after feature process is 0
                     sens_idx = 0
                     predict_attr = "GoodCustomer"
@@ -201,6 +203,7 @@ for model_name in args.model:
                         val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
                 # Load bail dataset
                 elif args.dataset == 'bail':
+                    dataset = 'bail'
                     sens_attr = "WHITE"  # column number after feature process is 0
                     sens_idx = 0
                     predict_attr = "RECID"

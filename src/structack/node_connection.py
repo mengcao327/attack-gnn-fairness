@@ -7,9 +7,9 @@ import community
 from structack.bfs import bfs
 import scipy.sparse as sp
 import scipy.sparse.linalg as spalg
-import pickle
 import os
 import pickle
+from tqdm import tqdm
 
 
 def sorted_connection(adj, nodes, n_perturbations, dataset_name=None):
@@ -32,7 +32,7 @@ def distance_hungarian_connection(adj, nodes, n_perturbations, dataset_name=None
     precomputed_path = f'../dataset/cached_structack/{dataset_name}_distance.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_distance...")
-        with open(precomputed_path,'rb') as ff:
+        with open(precomputed_path, 'rb') as ff:
             precomputed_distance = pickle.load(ff)
     else:
         precomputed_distance = {}
@@ -50,7 +50,7 @@ def distance_hungarian_connection(adj, nodes, n_perturbations, dataset_name=None
     # distance = {u:{v:distance[u][v] if v in distance[u] else self.INF for v in cols} for u in rows}
 
     new_rows = [u for u in rows if u not in precomputed_distance]
-    print(f'{len(new_rows)} distances to be computed' )
+    print(f'{len(new_rows)} distances to be computed')
     new_distances = bfs(graph, new_rows)
     precomputed_distance = {**precomputed_distance, **new_distances}
     distance = {u: {v: precomputed_distance[u][v] for v in cols} for u in rows}
@@ -67,7 +67,7 @@ def distance_hungarian_connection(adj, nodes, n_perturbations, dataset_name=None
 
     tick = time.time()
     if dataset_name is not None:
-        with open(precomputed_path,'wb') as ff:
+        with open(precomputed_path, 'wb') as ff:
             precomputed_distance = pickle.dump(precomputed_distance, ff)
     return [[i_u[i], i_v[j]] for i, j in zip(u, v)]
 
@@ -79,19 +79,19 @@ def katz_hungarian_connection(adj, nodes, n_perturbations, threshold=0.000001, n
     precomputed_path = f'../dataset/cached_structack/{dataset_name}_katz.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_katz...")
-        with open(precomputed_path,'r') as ff:
+        with open(precomputed_path, 'r') as ff:
             sigma = pickle.load(open(precomputed_path, 'rb'))
     else:
         D = nx.linalg.laplacianmatrix.laplacian_matrix(graph) + adj
         D_inv = spalg.inv(D)
         D_invA = D_inv * adj
-        l,v = spalg.eigs(D_invA, k=1, which="LR")
+        l, v = spalg.eigs(D_invA, k=1, which="LR")
         lmax = l[0].real
-        alpha = (1/lmax) * 0.9
+        alpha = (1 / lmax) * 0.9
         sigma = sp.csr_matrix(D_invA.shape, dtype=np.float)
         print('Calculate sigma matrix')
         for i in range(nsteps):
-            sigma_new = alpha *D_invA*sigma + sp.identity(adj.shape[0], dtype=np.float, format='csr')
+            sigma_new = alpha * D_invA * sigma + sp.identity(adj.shape[0], dtype=np.float, format='csr')
             diff = abs(spalg.norm(sigma, 1) - spalg.norm(sigma_new, 1))
             sigma = sigma_new
             print(diff)
@@ -100,7 +100,7 @@ def katz_hungarian_connection(adj, nodes, n_perturbations, threshold=0.000001, n
             print('Number of steps taken: ' + str(i))
         sigma = sigma.toarray().astype('float')
         if dataset_name is not None:
-            pickle.dump(sigma, open(precomputed_path, "wb" ) )
+            pickle.dump(sigma, open(precomputed_path, "wb"))
 
     similarity = {u: {v: sigma[u][v] for v in cols} for u in rows}
 
@@ -111,7 +111,7 @@ def katz_hungarian_connection(adj, nodes, n_perturbations, threshold=0.000001, n
 
     u, v = linear_sum_assignment(+mtx)
 
-    return [[i_u[i], i_v[j]] for i, j in zip(u, v)] 
+    return [[i_u[i], i_v[j]] for i, j in zip(u, v)]
     # cols = []
     # for i in rows:
     #     cols.append(np.argmin(sigma[i, :].todense(), axis=1)[0,0])
@@ -126,52 +126,78 @@ def community_hungarian_connection(adj, nodes, n_perturbations, dataset_name=Non
     precomputed_path = f'../dataset/cached_structack/{dataset_name}_communities.pkl'
     if dataset_name is not None and os.path.exists(precomputed_path):
         print("Loading precomputed_communities...")
-        with open(precomputed_path,'r') as ff:
+        with open(precomputed_path, 'r') as ff:
             node_community_mapping = pickle.load(open(precomputed_path, 'rb'))
     else:
+        print("Detecting communities...")
         node_community_mapping = community.community_louvain.best_partition(graph)
+        print(f"Storing detected communities in {precomputed_path}")
         if dataset_name is not None:
-            pickle.dump(node_community_mapping, open(precomputed_path, "wb" ))
-    
-    community_node_mapping = {}
-    community_edge_counts = {}
-    communities = list(set(node_community_mapping.values()))
-    for source_community in communities:
-        for target_community in communities:
-            community_edge_counts[(source_community, target_community)] = 0
-            community_edge_counts[(target_community, source_community)] = 0
+            pickle.dump(node_community_mapping, open(precomputed_path, "wb"))
 
-    for edge in graph.edges:
-        if node_community_mapping[edge[0]] not in community_node_mapping:
-            community_node_mapping[node_community_mapping[edge[0]]] = []
-        if node_community_mapping[edge[1]] not in community_node_mapping:
-            community_node_mapping[node_community_mapping[edge[1]]] = []
-        if edge[0] not in community_node_mapping[node_community_mapping[edge[0]]]:
-            community_node_mapping[node_community_mapping[edge[0]]].append(edge[0])
-        if edge[1] not in community_node_mapping[node_community_mapping[edge[1]]]:
-            community_node_mapping[node_community_mapping[edge[1]]].append(edge[1])
-        community_edge_counts[(node_community_mapping[edge[0]], node_community_mapping[edge[1]])] += 1
-        community_edge_counts[(node_community_mapping[edge[1]], node_community_mapping[edge[0]])] += 1
+    # community_edge_counts = {}
+    # communities = list(set(node_community_mapping.values()))
 
-    adj_community_rows = []
-    adj_community_cols = []
-    adj_community_data = []
+    # print("Reverse community mapping")
+    # community_node_mapping = {c: [u for u in nodes if node_community_mapping[u] == c] for c in communities}
 
-    for key in community_edge_counts:
-        adj_community_rows.append(key[0])
-        adj_community_cols.append(key[1])
-        adj_community_data.append(community_edge_counts[key])
+    print("Counting inter-community edges")
+    community_links = [(node_community_mapping[u], node_community_mapping[v]) for u, v in graph.edges]
+
+    community_edge_counts = {k: 0 for k in set(community_links)}
+    print(len(community_edge_counts))
+    print(len(community_links))
+    for k in tqdm(community_links):
+        community_edge_counts[k] += 1
+    print('done counting')
+
+    # for source_community in communities:
+    #     for target_community in communities:
+    #         edge_count = len([[u, v] for u in community_node_mapping[source_community]
+    #                           for v in community_node_mapping[target_community] if adj[u, v] != 0])
+    #         community_edge_counts[(source_community, target_community)] = edge_count
+    #         community_edge_counts[(target_community, source_community)] = edge_count
+
+    # for edge in graph.edges:
+    #     if node_community_mapping[edge[0]] not in community_node_mapping:
+    #         community_node_mapping[node_community_mapping[edge[0]]] = []
+    #     if node_community_mapping[edge[1]] not in community_node_mapping:
+    #         community_node_mapping[node_community_mapping[edge[1]]] = []
+    #     if edge[0] not in community_node_mapping[node_community_mapping[edge[0]]]:
+    #         community_node_mapping[node_community_mapping[edge[0]]].append(edge[0])
+    #     if edge[1] not in community_node_mapping[node_community_mapping[edge[1]]]:
+    #         community_node_mapping[node_community_mapping[edge[1]]].append(edge[1])
+    #     community_edge_counts[(node_community_mapping[edge[0]], node_community_mapping[edge[1]])] += 1
+    #     community_edge_counts[(node_community_mapping[edge[1]], node_community_mapping[edge[0]])] += 1
+
+    adj_community_rows = [key[0] for key in community_edge_counts]
+    adj_community_cols = [key[1] for key in community_edge_counts]
+    adj_community_data = [community_edge_counts[key] for key in community_edge_counts]
+
+    # for key in community_edge_counts:
+    #     adj_community_rows.append(key[0])
+    #     adj_community_cols.append(key[1])
+    #     adj_community_data.append(community_edge_counts[key])
 
     adj_community = sp.csr_matrix((adj_community_data, (adj_community_rows, adj_community_cols)))
     adj_community = adj_community.toarray().astype('float')
 
-    similarity = {u: {v: adj_community[node_community_mapping[u]][node_community_mapping[v]] for v in cols} for u in rows}
+    print('building similarity dict')
+    # similarity = {u: {v: adj_community[node_community_mapping[u]][node_community_mapping[v]] for v in cols} for u in
+    #               rows}
+    mtx = []
+    for u in tqdm(rows):
+        mtx.append(np.array([adj_community[node_community_mapping[u]][node_community_mapping[v]] for v in cols]))
+    mtx = np.array(mtx)
 
-    mtx = np.array([np.array(list(similarity[u].values())) for u in similarity])
+    print('building similarity mtx')
+    # mtx = np.array([np.array(list(similarity[u].values())) for u in similarity])
 
-    i_u = {i: u for i, u in enumerate(similarity)}
-    i_v = {i: v for i, v in enumerate(similarity[list(similarity.keys())[0]])}
+    print('preparing indices')
+    i_u = {i: u for i, u in enumerate(rows)}
+    i_v = {i: v for i, v in enumerate(cols)}
 
+    print("Computing an optimized assignment")
     u, v = linear_sum_assignment(+mtx)
 
     return [[i_u[i], i_v[j]] for i, j in zip(u, v)]
