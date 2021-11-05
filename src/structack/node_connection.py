@@ -187,7 +187,7 @@ def community_hungarian_connection(adj, nodes, n_perturbations, dataset_name=Non
     #               rows}
     mtx = []
     for u in tqdm(rows):
-        mtx.append([np.array([adj_community[node_community_mapping[u]][node_community_mapping[v]] for v in cols])])
+        mtx.append(np.array([adj_community[node_community_mapping[u]][node_community_mapping[v]] for v in cols]))
     mtx = np.array(mtx)
 
     print('building similarity mtx')
