@@ -22,7 +22,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument(
     '--dataset',
     type=str,
-    default='pokec_z',
+    default='nba',
     choices=[
         'pokec_z',
         'pokec_n',
@@ -106,8 +106,8 @@ parser.add_argument(
 args = parser.parse_known_args()[0]
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-# seed_set = [42, 0, 1, 2, 100]
-seed_set = [42]
+seed_set = [42, 0, 1, 2, 100]
+# seed_set = [42]
 
 # %%
 for model_name in args.model:
