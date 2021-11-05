@@ -22,7 +22,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument(
     '--dataset',
     type=str,
-    default='dblp',
+    default='pokec_n',
     choices=[
         'pokec_z',
         'pokec_n',
@@ -38,7 +38,7 @@ parser.add_argument('--val_percent', type=float, default=0.25,
 '''
             Model args
 '''
-parser.add_argument('--model', type=str, default=['fairgnn'], nargs='+',
+parser.add_argument('--model', type=str, default=['gat'], nargs='+',
                     choices=['gcn', 'gat', 'gsage', 'fairgnn'])
 parser.add_argument('--lr', type=float, default=0.001,
                     help='Initial learning rate.')
@@ -51,7 +51,7 @@ parser.add_argument('--dropout', type=float, default=0.6,
 parser.add_argument('--attack_type', type=str, default='none',
                     # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
-parser.add_argument("--preprocess_pokec", type = bool, default=False,
+parser.add_argument("--preprocess_pokec", type=bool, default=False,
                     help="Include only completed accounts in Pokec datasets (only valid when dataset==pokec_n/pokec_z])")
 parser.add_argument('--ptb_rate', type=float, nargs='+', default=[0.05],
                     help="Attack perturbation rate [0-1]")
@@ -95,7 +95,7 @@ parser.add_argument('--fastmode', action='store_true', default=False,
 parser.add_argument(
     '--acc',
     type=float,
-    default=0.6,
+    default=0.2,
     help='the selected FairGNN accuracy on val would be at least this high')
 parser.add_argument(
     '--roc',
@@ -106,8 +106,8 @@ parser.add_argument(
 args = parser.parse_known_args()[0]
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-seed_set = [42, 0, 1, 2, 100]
-# seed_set = [42]
+# seed_set = [42, 0, 1, 2, 100]
+seed_set = [42]
 
 # %%
 for model_name in args.model:
@@ -144,7 +144,7 @@ for model_name in args.model:
 
                     path = "../dataset/pokec/"
                     test_idx = False
-                
+
                 elif args.dataset == 'nba':
                     dataset = 'nba'
                     sens_attr = "country"
@@ -153,18 +153,23 @@ for model_name in args.model:
                     sens_number = 50
                     # seed=20
                     path = "../dataset/NBA"
-                    test_idx = True
+                    test_idx = False
                 adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_pokec(dataset,
-                                                                                       sens_attr,
-                                                                                       predict_attr,
-                                                                                       path=path,
-                                                                                       train_percent=args.train_percent,
-                                                                                       val_percent=args.val_percent,
-                                                                                       sens_number=sens_number,
-                                                                                       seed=seed, test_idx=test_idx)
+                                                                                                       sens_attr,
+                                                                                                       predict_attr,
+                                                                                                       path=path,
+                                                                                                       train_percent=args.train_percent,
+                                                                                                       val_percent=args.val_percent,
+                                                                                                       sens_number=sens_number,
+                                                                                                       seed=seed,
+                                                                                                       test_idx=test_idx)
                 if args.preprocess_pokec and 'pokec' in args.dataset:
                     print(f'Preprocessing {dataset}')
-                    adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj, features, labels, sens,seed)
+                    adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj,
+                                                                                                                   features,
+                                                                                                                   labels,
+                                                                                                                   sens,
+                                                                                                                   seed)
                     dataset += '_completed_accounts'
 
                 if args.dataset == "nba":
@@ -175,10 +180,11 @@ for model_name in args.model:
                     sens_attr = "Age"  # column number after feature process is 1
                     sens_idx = 1
                     predict_attr = 'NoDefaultNextMonth'
-                    label_number = 6000
+                    # label_number = 6000
                     path_credit = "../dataset/credit"
                     adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_credit(
-                        args.dataset, sens_attr, predict_attr, path=path_credit, label_number=label_number,sens_number=args.sens_number,seed=seed)
+                        args.dataset, sens_attr, predict_attr, path=path_credit, train_percent=args.train_percent,
+                        val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
                     norm_features = feature_norm(features)
                     norm_features[:, sens_idx] = features[:, sens_idx]
                     features = norm_features
@@ -188,19 +194,21 @@ for model_name in args.model:
                     sens_attr = "Gender"  # column number after feature process is 0
                     sens_idx = 0
                     predict_attr = "GoodCustomer"
-                    label_number = 100
+                    # label_number = 100
                     path_german = "../dataset/german"
                     adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_german(
-                        args.dataset, sens_attr, predict_attr, path=path_german, label_number=label_number,sens_number=args.sens_number, seed=seed)
+                        args.dataset, sens_attr, predict_attr, path=path_german, train_percent=args.train_percent,
+                        val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
                 # Load bail dataset
                 elif args.dataset == 'bail':
                     sens_attr = "WHITE"  # column number after feature process is 0
                     sens_idx = 0
                     predict_attr = "RECID"
-                    label_number = 100
+                    # label_number = 100
                     path_bail = "../dataset/bail"
                     adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_bail(
-                        args.dataset, sens_attr, predict_attr, path=path_bail, label_number=label_number, sens_number=args.sens_number,seed=seed)
+                        args.dataset, sens_attr, predict_attr, path=path_bail, train_percent=args.train_percent,
+                        val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
                     norm_features = feature_norm(features)
                     norm_features[:, sens_idx] = features[:, sens_idx]
                     features = norm_features
@@ -209,14 +217,15 @@ for model_name in args.model:
                     sens_attr = "gender"
                     predict_attr = "label"
                     path = "../dataset/dblp/"
-                    label_number = 1000
+                    # label_number = 1000
                     adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_dblp(args.dataset,
-                                                                                          sens_attr,
-                                                                                          predict_attr,
-                                                                                          path=path,
-                                                                                          label_num=label_number,
-                                                                                          sens_number=args.sens_number,
-                                                                                          seed=seed)
+                                                                                                          sens_attr,
+                                                                                                          predict_attr,
+                                                                                                          path=path,
+                                                                                                          train_percent=args.train_percent,
+                                                                                                          val_percent=args.val_percent,
+                                                                                                          sens_number=args.sens_number,
+                                                                                                          seed=seed)
                     # features = feature_norm(features)
                     #  normalization may cause problem for dblp: model not converge
 
@@ -225,7 +234,8 @@ for model_name in args.model:
                     exit(0)
 
             if args.attack_type != 'none':
-                adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset)
+                adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
+                             seed, dataset)
 
             print("Test samples:", len(idx_test))
             if sens_attr:
@@ -261,7 +271,7 @@ for model_name in args.model:
 
                 heads = ([args.num_heads] * args.num_layers) + [args.num_out_heads]
                 model = GAT(G,
-                            args.num_layers,
+                            1,  # num_layers
                             features.shape[1],
                             args.hidden,
                             1,
@@ -278,6 +288,8 @@ for model_name in args.model:
                 model.estimator.load_state_dict(torch.load(
                     "./checkpoint/GCN_sens_{}_ns_{}".format(args.dataset, args.sens_number), map_location=device.type))
 
+
+
             if args.cuda:
                 model.cuda()
                 features = features.cuda()
@@ -288,11 +300,9 @@ for model_name in args.model:
                 idx_val = idx_val.cuda()
                 idx_test = idx_test.cuda()
                 idx_sens_train = idx_sens_train.cuda()
-
             optimizer = optim.Adam(model.parameters(),
                                    lr=args.lr, weight_decay=args.weight_decay)
             loss_fcn = torch.nn.BCEWithLogitsLoss()
-
             # Train model
             t_total = time.time()
             vali_max = [0, [0, 0, 0, 0, 0, 0], [100, 100, 100], -1]
@@ -319,6 +329,8 @@ for model_name in args.model:
                     loss_all.append(loss_train.detach().cpu().item())
                     acc_train, roc_train, _, _, _, _ = classification_metrics(
                         output[idx_train], labels[idx_train])
+                    # _, _, _, _ = fair_metric(
+                    #     labels, output, idx_train, sens, 'train')
                     loss_train.backward()
                     optimizer.step()
 
@@ -330,7 +342,8 @@ for model_name in args.model:
 
                 acc_val, roc_val, _, _, _, _ = classification_metrics(
                     output[idx_val], labels[idx_val])
-
+                # _,_,_,_ = fair_metric(
+                #     labels, output, idx_val, sens, 'val')
                 acc_test, roc_test, p, r, maf1_test, mif1_test = classification_metrics(
                     output[idx_test], labels[idx_test])
                 parity, equality, eq_odds, middle_results = fair_metric(

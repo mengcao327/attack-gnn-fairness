@@ -127,6 +127,8 @@ def fair_metric(labels, output, idx, sens, status):
     # print(status,':y1a0:',mid_result['y1a0'])
     # print(status,':y0a1:',mid_result['y0a1'])
     # print(status,':y0a0:',mid_result['y0a0'])
+    # print(status, ':y1:', mid_result['y1a1']+mid_result['y1a0'])
+    # print(status, ':y0:', mid_result['y0a1']+mid_result['y0a0'])
     return parity, equality, eq_odds, mid_result  # ,dis_imp,mid_result
 
 
@@ -175,6 +177,7 @@ def load_pokec(
     # original data will have no influence
 
     # extract largested connected components
+    print(f"{adj.shape[0]} of nodes before selecting LCC")
     _adj = adj.tocsr()
     lcc = largest_connected_components(_adj)
     _A = _adj[lcc][:, lcc]
@@ -194,7 +197,7 @@ def load_pokec(
     random.seed(seed)
     label_idx = np.where(labels >= 0)[0]
     random.shuffle(label_idx)
-    print("num labels:", len(label_idx))
+    # print("num labels:", len(label_idx))
 
     idx_train = label_idx[:int(train_percent * len(label_idx))]
     idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
@@ -211,6 +214,9 @@ def load_pokec(
     sens_idx = set(np.where(sens >= 0)[0])
     print("num nodes with sa:", len(sens_idx))
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
+
+    check_dataset(labels, sens, idx_train, idx_val, idx_test)
+
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
     random.seed(seed)
@@ -226,7 +232,7 @@ def load_pokec(
     return adj, features, labels, idx_train, idx_val, idx_test, sens,idx_sens_train
 
 
-def preprocess_pokec_complete_accounts(adj, features, labels, sens,seed):
+def preprocess_pokec_complete_accounts(adj, features, labels, sens, seed):
     """
     Pre-processes Pokec dataset by retaining only complete accounts (accounts where label!=-1).
     :param adj: original adjacency matrix
@@ -269,12 +275,34 @@ def preprocess_pokec_complete_accounts(adj, features, labels, sens,seed):
 
     return adj, features, labels, torch.LongTensor(idx_train), torch.LongTensor(idx_val), torch.LongTensor(idx_test), sens
 
+def check_dataset(labels,sens,idx_train,idx_val,idx_test):
+    label_idx = np.where(labels >= 0)[0]
+
+    print("num labels:", len(label_idx))
+    # check label balancing
+    label_idx_0 = np.where(labels == 0)[0]
+    label_idx_1 = np.where(labels == 1)[0]
+    print("num labels 0:", len(label_idx_0))
+    print("num labels 1:", len(label_idx) - len(label_idx_0))
+    print("num labels 1:", len(label_idx_1))
+
+
+    sens_idx = set(np.where(sens >= 0)[0])
+    print("num nodes with sa:", len(sens_idx))
+    # check sa
+    sens_idx_0 = set(np.where(sens == 0)[0])
+    print("num nodes with sa=0:", len(sens_idx_0))
+    print("num nodes with sa=1:", len(sens_idx) - len(sens_idx_0))
+
+    print(f"Data splits: {len(idx_train)} train, {len(idx_val)} val, {len(idx_test)} test. ")
+
 
 def load_dblp(dataset,
               sens_attr,
               predict_attr,
               path="../dataset/dblp/",
-              label_num=100,
+              train_percent=0.5,
+              val_percent=0.25,
               sens_number=200,
               seed=42):
     """Load data"""
@@ -299,11 +327,6 @@ def load_dblp(dataset,
     # build graph
     idx = np.array(idx_features_labels["index"], dtype=int)
     idx_map = {j: i for i, j in enumerate(idx)}
-    # edges_unordered = np.genfromtxt(
-    #     os.path.join(
-    #         path,
-    #         "{}_relationship.txt".format(dataset)),
-    #     dtype=str)
     edges_unordered = np.genfromtxt(
         f'{path}{dataset}_relationship.txt').astype('int')
     edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
@@ -344,20 +367,21 @@ def load_dblp(dataset,
 
     label_idx = np.where(labels > 0)[0]
     random.shuffle(label_idx)
-    print("num labels:", len(label_idx))
+    # print("num labels:", len(label_idx))
 
-    idx_train = label_idx[:min(int(0.3 * len(label_idx)), label_num)]
-    idx_val = label_idx[int(0.3 * len(label_idx)):int(0.6 * len(label_idx))]
-    idx_test = label_idx[int(0.6 * len(label_idx)):]
+    idx_train = label_idx[:int(train_percent * len(label_idx))]
+    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent+val_percent) * len(label_idx))]
+    idx_test = label_idx[int((train_percent+val_percent) * len(label_idx)):]
 
     labels[labels ==0] = -1
     labels[labels > 1] = 0  # 1:database 0: DM,IR,ML combined
 
-
     sens_idx = set(np.where(sens >= 0)[0])
-    print("num nodes with sa:", len(sens_idx))
+
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
-    # idx_val = np.asarray(list(sens_idx & set(idx_val)))
+
+    check_dataset(labels,sens,idx_train,idx_val,idx_test)
+
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
     random.seed(seed)
@@ -596,7 +620,8 @@ def load_credit(
         sens_attr="Age",
         predict_attr="NoDefaultNextMonth",
         path="./dataset/credit/",
-        label_number=1000,
+        train_percent=0.5,
+        val_percent=0.25,
         sens_number=200,
         seed=20):
     # print('Loading {} dataset from {}'.format(dataset, path))
@@ -649,26 +674,33 @@ def load_credit(
 
     import random
     random.seed(seed)
-    label_idx_0 = np.where(labels == 0)[0]
-    label_idx_1 = np.where(labels == 1)[0]
-    random.shuffle(label_idx_0)
-    random.shuffle(label_idx_1)
+    label_idx = np.where(labels >= 0)[0]
+    random.shuffle(label_idx)
+    idx_train = label_idx[:int(train_percent * len(label_idx))]
+    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
+    idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
+    # label_idx_0 = np.where(labels == 0)[0]
+    # label_idx_1 = np.where(labels == 1)[0]
+    # random.shuffle(label_idx_0)
+    # random.shuffle(label_idx_1)
+    #
+    # idx_train = np.append(label_idx_0[:min(int(0.5 *
+    #                                            len(label_idx_0)), label_number //
+    #                                        2)], label_idx_1[:min(int(0.5 *
+    #                                                                  len(label_idx_1)), label_number //
+    #                                                              2)])
+    # idx_val = np.append(label_idx_0[int(0.5 *
+    #                                     len(label_idx_0)):int(0.75 *
+    #                                                           len(label_idx_0))], label_idx_1[int(0.5 *
+    #                                                                                               len(label_idx_1)):int(
+    #     0.75 *
+    #     len(label_idx_1))])
+    # idx_test = np.append(label_idx_0[int(
+    #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
-    idx_train = np.append(label_idx_0[:min(int(0.5 *
-                                               len(label_idx_0)), label_number //
-                                           2)], label_idx_1[:min(int(0.5 *
-                                                                     len(label_idx_1)), label_number //
-                                                                 2)])
-    idx_val = np.append(label_idx_0[int(0.5 *
-                                        len(label_idx_0)):int(0.75 *
-                                                              len(label_idx_0))], label_idx_1[int(0.5 *
-                                                                                                  len(label_idx_1)):int(
-        0.75 *
-        len(label_idx_1))])
-    idx_test = np.append(label_idx_0[int(
-        0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
+    check_dataset(labels, sens, idx_train, idx_val, idx_test)
     sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
@@ -687,7 +719,8 @@ def load_bail(
         sens_attr="WHITE",
         predict_attr="RECID",
         path="../dataset/bail/",
-        label_number=1000,
+        train_percent=0.5,
+        val_percent=0.25,
         sens_number=200,
         seed=20):
     # print('Loading {} dataset from {}'.format(dataset, path))
@@ -745,25 +778,31 @@ def load_bail(
 
     import random
     random.seed(seed)
-    label_idx_0 = np.where(labels == 0)[0]
-    label_idx_1 = np.where(labels == 1)[0]
-    random.shuffle(label_idx_0)
-    random.shuffle(label_idx_1)
-    idx_train = np.append(label_idx_0[:min(int(0.5 *
-                                               len(label_idx_0)), label_number //
-                                           2)], label_idx_1[:min(int(0.5 *
-                                                                     len(label_idx_1)), label_number //
-                                                                 2)])
-    idx_val = np.append(label_idx_0[int(0.5 *
-                                        len(label_idx_0)):int(0.75 *
-                                                              len(label_idx_0))], label_idx_1[int(0.5 *
-                                                                                                  len(label_idx_1)):int(
-        0.75 *
-        len(label_idx_1))])
-    idx_test = np.append(label_idx_0[int(
-        0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
+    label_idx = np.where(labels >= 0)[0]
+    random.shuffle(label_idx)
+    idx_train = label_idx[:int(train_percent * len(label_idx))]
+    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
+    idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
+    # label_idx_0 = np.where(labels == 0)[0]
+    # label_idx_1 = np.where(labels == 1)[0]
+    # random.shuffle(label_idx_0)
+    # random.shuffle(label_idx_1)
+    # idx_train = np.append(label_idx_0[:min(int(0.5 *
+    #                                            len(label_idx_0)), label_number //
+    #                                        2)], label_idx_1[:min(int(0.5 *
+    #                                                                  len(label_idx_1)), label_number //
+    #                                                              2)])
+    # idx_val = np.append(label_idx_0[int(0.5 *
+    #                                     len(label_idx_0)):int(0.75 *
+    #                                                           len(label_idx_0))], label_idx_1[int(0.5 *
+    #                                                                                               len(label_idx_1)):int(
+    #     0.75 *
+    #     len(label_idx_1))])
+    # idx_test = np.append(label_idx_0[int(
+    #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
+    check_dataset(labels, sens, idx_train, idx_val, idx_test)
     sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
@@ -782,7 +821,8 @@ def load_german(
         sens_attr="Gender",
         predict_attr="GoodCustomer",
         path="../dataset/german/",
-        label_number=1000,
+        train_percent=0.5,
+        val_percent=0.25,
         sens_number=200,
         seed=20):
     # print('Loading {} dataset from {}'.format(dataset, path))
@@ -841,26 +881,32 @@ def load_german(
 
     import random
     random.seed(seed)
-    label_idx_0 = np.where(labels == 0)[0]
-    label_idx_1 = np.where(labels == 1)[0]
-    random.shuffle(label_idx_0)
-    random.shuffle(label_idx_1)
-
-    idx_train = np.append(label_idx_0[:min(int(0.5 *
-                                               len(label_idx_0)), label_number //
-                                           2)], label_idx_1[:min(int(0.5 *
-                                                                     len(label_idx_1)), label_number //
-                                                                 2)])
-    idx_val = np.append(label_idx_0[int(0.5 *
-                                        len(label_idx_0)):int(0.75 *
-                                                              len(label_idx_0))], label_idx_1[int(0.5 *
-                                                                                                  len(label_idx_1)):int(
-        0.75 *
-        len(label_idx_1))])
-    idx_test = np.append(label_idx_0[int(
-        0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
+    label_idx = np.where(labels >= 0)[0]
+    random.shuffle(label_idx)
+    idx_train = label_idx[:int(train_percent * len(label_idx))]
+    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
+    idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
+    # label_idx_0 = np.where(labels == 0)[0]
+    # label_idx_1 = np.where(labels == 1)[0]
+    # random.shuffle(label_idx_0)
+    # random.shuffle(label_idx_1)
+    #
+    # idx_train = np.append(label_idx_0[:min(int(0.5 *
+    #                                            len(label_idx_0)), label_number //
+    #                                        2)], label_idx_1[:min(int(0.5 *
+    #                                                                  len(label_idx_1)), label_number //
+    #                                                              2)])
+    # idx_val = np.append(label_idx_0[int(0.5 *
+    #                                     len(label_idx_0)):int(0.75 *
+    #                                                           len(label_idx_0))], label_idx_1[int(0.5 *
+    #                                                                                               len(label_idx_1)):int(
+    #     0.75 *
+    #     len(label_idx_1))])
+    # idx_test = np.append(label_idx_0[int(
+    #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
+    check_dataset(labels, sens, idx_train, idx_val, idx_test)
     sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
