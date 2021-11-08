@@ -12,15 +12,15 @@ import torch
 import os
 
 
-def build_random(adj=None, features=None, labels=None, idx_train=None, device=None):
+def build_random(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return Random()
 
 
-def build_dice(adj=None, features=None, labels=None, idx_train=None, device=None):
+def build_dice(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return DICE()
 
 
-def build_sacide(adj=None, features=None, labels=None, idx_train=None, device=None):
+def build_sacide(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return SACIDE()
 
 
@@ -69,19 +69,19 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
     n_perturbations = int(ptb_rate * (adj.sum() // 2))
     print(f'n_perturbations = {n_perturbations}')
 
-    if model_builder == build_metattack:
+    if model_builder == build_metattack or model_builder == build_prbcd():
         adj, features, labels = preprocess(adj, sp.coo_matrix(features.cpu().numpy()), labels.cpu().numpy(),
                                            preprocess_adj=False)
 
     # build the model
-    model = model_builder(adj, features, labels, idx_train, device)
+    model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
     modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
     return modified_adj
 
 
-def build_metattack(adj=None, features=None, labels=None, idx_train=None, device=None):
+def build_metattack(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     lambda_ = 0
 
     # Setup Surrogate Model
@@ -102,6 +102,25 @@ def build_metattack(adj=None, features=None, labels=None, idx_train=None, device
 def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(features, adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
     return to_scipy(model.modified_adj)
+
+
+from rgnn_at_scale.attacks import create_attack
+from rgnn_at_scale.models.gcn import GCN as prGCN
+
+
+def build_prbcd(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    model = prGCN(n_features=features.shape[1], n_classes=labels.max().item() + 1)
+    attack_params = {}  # TODO: can set attack params
+    attack_model = create_attack("PRBCD", attr=features, adj=adj, labels=labels, model=model, idx_attack=idx_test,
+                                 device=device, data_device=device, binary_attr=True,
+                                 make_undirected=True, **attack_params)
+    return attack_model
+
+
+def attack_prbcd(adversary, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    adversary.attack(n_perturbations)
+    pert_adj, pert_attr = adversary.get_pertubations()  # TODO still the pert_attr should be used somehow
+    return pert_adj
 
 
 def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name):
@@ -132,8 +151,10 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
         print('Perturbed adjacency matrix loaded successfully!')
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
-    builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide}
-    attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide}
+    builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
+              'prbcd': build_prbcd}
+    attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
+               'prbcd': attack_prbcd}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:
