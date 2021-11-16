@@ -69,7 +69,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
     n_perturbations = int(ptb_rate * (adj.sum() // 2))
     print(f'n_perturbations = {n_perturbations}')
 
-    if model_builder == build_metattack or model_builder == build_prbcd():
+    if model_builder == build_metattack or model_builder == build_prbcd:
         adj, features, labels = preprocess(adj, sp.coo_matrix(features.cpu().numpy()), labels.cpu().numpy(),
                                            preprocess_adj=False)
 
@@ -111,7 +111,7 @@ from rgnn_at_scale.models.gcn import GCN as prGCN
 def build_prbcd(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     model = prGCN(n_features=features.shape[1], n_classes=labels.max().item() + 1)
     attack_params = {}  # TODO: can set attack params
-    attack_model = create_attack("PRBCD", attr=features, adj=adj, labels=labels, model=model, idx_attack=idx_test,
+    attack_model = create_attack("PRBCD", attr=features, adj=adj, labels=labels, model=model, idx_attack=idx_test.detach().cpu().numpy(),
                                  device=device, data_device=device, binary_attr=True,
                                  make_undirected=True, **attack_params)
     return attack_model
@@ -120,7 +120,7 @@ def build_prbcd(adj=None, features=None, labels=None, idx_train=None, idx_test=N
 def attack_prbcd(adversary, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     adversary.attack(n_perturbations)
     pert_adj, pert_attr = adversary.get_pertubations()  # TODO still the pert_attr should be used somehow
-    return pert_adj
+    return pert_adj.to_scipy()
 
 
 def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name):
