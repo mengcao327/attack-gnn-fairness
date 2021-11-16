@@ -71,15 +71,15 @@ def load_dataset(args, seed):
                                                                                                sens_number=sens_number,
                                                                                                seed=seed,
                                                                                                test_idx=test_idx)
-        if args.preprocess_pokec and 'pokec' in args.dataset:
-            # deprecated
-            print(f'(DEPRECATED) Preprocessing {dataset}')
-            adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj,
-                                                                                                           features,
-                                                                                                           labels,
-                                                                                                           sens,
-                                                                                                           seed)
-            dataset += '_completed_accounts'
+        # if args.preprocess_pokec and 'pokec' in args.dataset:
+        #     # deprecated
+        #     print(f'(DEPRECATED) Preprocessing {dataset}')
+        #     adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj,
+        #                                                                                                    features,
+        #                                                                                                    labels,
+        #                                                                                                    sens,
+        #                                                                                                    seed)
+        #     dataset += '_completed_accounts'
 
         if args.dataset == "nba":
             features = feature_norm(features)
