@@ -126,6 +126,7 @@ def load_dataset(args, seed):
             features = norm_features
 
         elif args.dataset == 'dblp':
+            dataset = 'dblp'
             sens_attr = "gender"
             predict_attr = "label"
             path = "../dataset/dblp/"
