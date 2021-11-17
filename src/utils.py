@@ -33,9 +33,9 @@ def load_perturbed_adj(dataset_name, attack_name, ptb_rate, seed):
 def load_dataset(args, seed):
     if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
         if args.dataset == 'pokec_z':
+            sens_attr = args.sensitive
             dataset = 'region_job'
 
-            sens_attr = "region"
             predict_attr = "I_am_working_in_field"
             # label_number = 100000
             sens_number = args.sens_number
@@ -44,8 +44,8 @@ def load_dataset(args, seed):
             test_idx = False
 
         elif args.dataset == 'pokec_n':
+            sens_attr = args.sensitive
             dataset = 'region_job_2'
-            sens_attr = "region"
             predict_attr = "I_am_working_in_field"
             # label_number = 100000
             sens_number = args.sens_number
@@ -279,7 +279,8 @@ def load_pokec(
     header = list(idx_features_labels.columns)
     header.remove("user_id")
 
-    header.remove(sens_attr)
+    for attr in 'gender AGE region'.split(): # TODO binarize AGE
+        header.remove(attr)
     header.remove(predict_attr)
 
     features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)

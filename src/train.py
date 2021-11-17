@@ -51,6 +51,9 @@ parser.add_argument('--dropout', type=float, default=0.6,
 parser.add_argument('--attack_type', type=str, default='none',
                     # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
+parser.add_argument('--sensitive', type=str, default='region',
+                    choices=['gender', 'region'],
+                    help='Sensitive attribute of Pokec.')
 parser.add_argument("--preprocess_pokec", type=bool, default=False,
                     help="Include only completed accounts in Pokec datasets (only valid when dataset==pokec_n/pokec_z])")
 parser.add_argument('--ptb_rate', type=float, nargs='+', default=[0.05],
@@ -123,7 +126,7 @@ for model_name in args.model:
 
             # Load data
             print(args.dataset)
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr =\
+            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr = \
                 load_dataset(args, seed)
 
             if args.attack_type != 'none':
@@ -180,8 +183,6 @@ for model_name in args.model:
                 model = FairGNN(G, nfeat=features.shape[1], args=args)
                 model.estimator.load_state_dict(torch.load(
                     "./checkpoint/GCN_sens_{}_ns_{}".format(args.dataset, args.sens_number), map_location=device.type))
-
-
 
             if args.cuda:
                 model.cuda()
@@ -381,7 +382,7 @@ for model_name in args.model:
             'parity',
             'equality',
             'eq_odds']
-        fname = '../results/result-' + str(args.dataset) + '-' + str(model_name) + \
+        fname = '../results/result-' + str(args.dataset) + (args.sensitive if 'pokec' in args.dataset else '')+ '-' + str(model_name) + \
                 '-' + str(args.attack_type) + (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
