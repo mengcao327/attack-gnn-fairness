@@ -18,6 +18,135 @@ except ImportError:
         return x
 
 
+def load_perturbed_adj(dataset_name, attack_name, ptb_rate, seed):
+    cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
+    if os.path.exists(cached_filename):
+        print(f'Perturbed adjacency matrix already exists at {cached_filename}. Loading...')
+        modified_adj = sp.load_npz(cached_filename)
+        print('Perturbed adjacency matrix loaded successfully!')
+        return modified_adj
+    else:
+        print(f"Perturbed graph {cached_filename} does not exist")
+        return None
+
+
+def load_dataset(args, seed):
+    if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
+        if args.dataset == 'pokec_z':
+            dataset = 'region_job'
+
+            sens_attr = "region"
+            predict_attr = "I_am_working_in_field"
+            # label_number = 100000
+            sens_number = args.sens_number
+
+            path = "../dataset/pokec/"
+            test_idx = False
+
+        elif args.dataset == 'pokec_n':
+            dataset = 'region_job_2'
+            sens_attr = "region"
+            predict_attr = "I_am_working_in_field"
+            # label_number = 100000
+            sens_number = args.sens_number
+
+            path = "../dataset/pokec/"
+            test_idx = False
+
+        elif args.dataset == 'nba':
+            dataset = 'nba'
+            sens_attr = "country"
+            predict_attr = "SALARY"
+            # label_number = 200
+            sens_number = 50
+            # seed=20
+            path = "../dataset/NBA"
+            test_idx = False
+        adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_pokec(dataset,
+                                                                                               sens_attr,
+                                                                                               predict_attr,
+                                                                                               path=path,
+                                                                                               train_percent=args.train_percent,
+                                                                                               val_percent=args.val_percent,
+                                                                                               sens_number=sens_number,
+                                                                                               seed=seed,
+                                                                                               test_idx=test_idx)
+        # if args.preprocess_pokec and 'pokec' in args.dataset:
+        #     # deprecated
+        #     print(f'(DEPRECATED) Preprocessing {dataset}')
+        #     adj, features, labels, idx_train, idx_val, idx_test, sens = preprocess_pokec_complete_accounts(adj,
+        #                                                                                                    features,
+        #                                                                                                    labels,
+        #                                                                                                    sens,
+        #                                                                                                    seed)
+        #     dataset += '_completed_accounts'
+
+        if args.dataset == "nba":
+            features = feature_norm(features)
+    else:
+        # Load credit_scoring dataset
+        if args.dataset == 'credit':
+            dataset = 'credit'
+            sens_attr = "Age"  # column number after feature process is 1
+            sens_idx = 1
+            predict_attr = 'NoDefaultNextMonth'
+            # label_number = 6000
+            path_credit = "../dataset/credit"
+            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_credit(
+                args.dataset, sens_attr, predict_attr, path=path_credit, train_percent=args.train_percent,
+                val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
+            norm_features = feature_norm(features)
+            norm_features[:, sens_idx] = features[:, sens_idx]
+            features = norm_features
+
+        # Load german dataset
+        elif args.dataset == 'german':
+            dataset = 'german'
+            sens_attr = "Gender"  # column number after feature process is 0
+            sens_idx = 0
+            predict_attr = "GoodCustomer"
+            # label_number = 100
+            path_german = "../dataset/german"
+            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_german(
+                args.dataset, sens_attr, predict_attr, path=path_german, train_percent=args.train_percent,
+                val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
+        # Load bail dataset
+        elif args.dataset == 'bail':
+            dataset = 'bail'
+            sens_attr = "WHITE"  # column number after feature process is 0
+            sens_idx = 0
+            predict_attr = "RECID"
+            # label_number = 100
+            path_bail = "../dataset/bail"
+            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_bail(
+                args.dataset, sens_attr, predict_attr, path=path_bail, train_percent=args.train_percent,
+                val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
+            norm_features = feature_norm(features)
+            norm_features[:, sens_idx] = features[:, sens_idx]
+            features = norm_features
+
+        elif args.dataset == 'dblp':
+            sens_attr = "gender"
+            predict_attr = "label"
+            path = "../dataset/dblp/"
+            # label_number = 1000
+            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_dblp(args.dataset,
+                                                                                                  sens_attr,
+                                                                                                  predict_attr,
+                                                                                                  path=path,
+                                                                                                  train_percent=args.train_percent,
+                                                                                                  val_percent=args.val_percent,
+                                                                                                  sens_number=args.sens_number,
+                                                                                                  seed=seed)
+            # features = feature_norm(features)
+            #  normalization may cause problem for dblp: model not converge
+
+        else:
+            print('Invalid dataset name!!')
+            exit(0)
+    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr
+
+
 def encode_onehot(labels):
     classes = set(labels)
     classes_dict = {c: np.identity(len(classes))[i, :] for i, c in
