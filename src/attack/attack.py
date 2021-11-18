@@ -1,6 +1,7 @@
 from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
+from attack.sp_increase import SPI_heuristic
 from structack.structack import build_custom
 import structack.node_selection as ns
 import structack.node_connection as nc
@@ -10,7 +11,6 @@ import scipy.sparse as sp
 import numpy as np
 import torch
 import os
-
 
 def build_random(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return Random()
@@ -22,6 +22,10 @@ def build_dice(adj=None, features=None, labels=None, idx_train=None, idx_test=No
 
 def build_sacide(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return SACIDE()
+
+
+def build_SPI_heuristic(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_heuristic()
 
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
@@ -38,6 +42,12 @@ def attack_dice(model, adj, features, labels, n_perturbations, idx_train, idx_un
 
 def attack_sacide(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_heuristic(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
 
@@ -104,8 +114,8 @@ def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, i
     return to_scipy(model.modified_adj)
 
 
-from rgnn_at_scale.attacks import create_attack
-from rgnn_at_scale.models.gcn import GCN as prGCN
+# from rgnn_at_scale.attacks import create_attack
+# from rgnn_at_scale.models.gcn import GCN as prGCN
 
 
 def build_prbcd(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
@@ -152,9 +162,9 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd}
+              'prbcd': build_prbcd, 'spih':build_SPI_heuristic}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd}
+               'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:
