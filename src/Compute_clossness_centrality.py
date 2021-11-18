@@ -93,11 +93,11 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 if args.cuda:
     torch.cuda.manual_seed(seed)
-
+dataset_name = args.dataset
 if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
     if args.dataset == 'pokec_z':
         dataset = 'region_job'
-
+        dataset_name = dataset
         sens_attr = "region"
         predict_attr = "I_am_working_in_field"
         # label_number = 100000
@@ -108,6 +108,7 @@ if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
 
     elif args.dataset == 'pokec_n':
         dataset = 'region_job_2'
+        dataset_name = dataset
         sens_attr = "region"
         predict_attr = "I_am_working_in_field"
         # label_number = 100000
@@ -146,6 +147,7 @@ if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
     if args.dataset == "nba":
         features = feature_norm(features)
 else:
+
     # Load credit_scoring dataset
     if args.dataset == 'credit':
         sens_attr = "Age"  # column number after feature process is 1
@@ -206,9 +208,10 @@ else:
 
 if args.attack_type != 'none':
     # cached_filename = f'../dataset/cached_attacks/{args.dataset}_{args.attack_type}_{args.ptb_rate:.2f}_{seed}.npz'
-    cached_filename = '../dataset/cached_attacks/' + args.dataset + '_' + args.attack_type + '_' + args.ptb_rate + '_' + str(
+    cached_filename = '../dataset/cached_attacks/' + dataset_name + '_' + args.attack_type + '_' + args.ptb_rate + '_' + str(
         args.seed) + '.npz'
     # check if modified_adj of (dataset_name, attack_name, ptb_rate, seed) are stored
+    print(f'attempting to load {cached_filename}')
     if os.path.exists(cached_filename):
         print(f'Perturbed adjacency matrix already exists at {cached_filename}. Loading...')
         modified_adj = sp.load_npz(cached_filename)

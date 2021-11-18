@@ -123,7 +123,7 @@ def attack_prbcd(adversary, adj, features, labels, n_perturbations, idx_train, i
     return pert_adj.to_scipy()
 
 
-def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name):
+def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name, sens_attr=None):
     """
     builds the attack, applies the perturbation
     :param attack_name: random, dice, metattack
@@ -143,7 +143,10 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     if not os.path.exists(f'../dataset/cached_attacks/'):
         os.mkdir(f'../dataset/cached_attacks/')
 
-    cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
+    if sens_attr=='gender' and 'region_job' in dataset_name and attack_name=='sacide':
+        cached_filename = f'../dataset/cached_attacks/{dataset_name}_{sens_attr}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
+    else:
+        cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
     # check if modified_adj of (dataset_name, attack_name, ptb_rate, seed) are stored
     if os.path.exists(cached_filename):
         print(f'Perturbed adjacency matrix already exists at {cached_filename}. Loading...')

@@ -98,6 +98,9 @@ parser.add_argument(
         'german',
         'bail',
         'dblp'])
+parser.add_argument('--sensitive', type=str, default='region',
+                    choices=['gender', 'region'],
+                    help='Sensitive attribute of Pokec.')
 parser.add_argument(
     '--stats_type',
     type=str,
@@ -119,12 +122,12 @@ for ptb_rate in (args.ptb_rate if args.attack_type != 'none' else [0]):
         print("===== Computing stats =====")
         print(args.dataset)
         print(f'seed={seed} ptb_rate={ptb_rate}')
-        adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr = \
+        adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number = \
             load_dataset(args, seed)
 
         if args.attack_type != 'none':
             adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
-                         seed, dataset)
+                         seed, dataset, sens_attr)
 
         G = nx.from_scipy_sparse_matrix(adj)
         if args.stats_type=='homophily': 
@@ -150,7 +153,7 @@ for ptb_rate in (args.ptb_rate if args.attack_type != 'none' else [0]):
 
         df_stats = df_stats.append(row, ignore_index=True)
 
-fname = f'../results/stats-{args.stats_type}-' + str(args.dataset) + \
+fname = f'../results/stats-{args.stats_type}-' + str(args.dataset) + '-' + (sens_attr if 'pokec' in args.dataset else '') + \
         '-' + str(args.attack_type) + '.csv'
 
 df_stats.to_csv(fname, index=False)
