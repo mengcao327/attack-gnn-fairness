@@ -1,0 +1,2 @@
+ptb_rate,seed,label_homophily_macro,label_homophily_micro,sens_homophily_macro,sens_homophily_micro
+0.0,0.0,0.7879883656945209,0.8125404862968979,0.5493550942415025,0.5417175417193247
