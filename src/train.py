@@ -126,12 +126,12 @@ for model_name in args.model:
 
             # Load data
             print(args.dataset)
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr = \
+            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number = \
                 load_dataset(args, seed)
 
             if args.attack_type != 'none':
                 adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
-                             seed, dataset)
+                             seed, dataset, sens_attr)
 
             print("Test samples:", len(idx_test))
             if sens_attr:
@@ -182,7 +182,7 @@ for model_name in args.model:
 
                 model = FairGNN(G, nfeat=features.shape[1], args=args)
                 model.estimator.load_state_dict(torch.load(
-                    "./checkpoint/GCN_sens_{}_ns_{}".format(args.dataset, args.sens_number), map_location=device.type))
+                    "./checkpoint/GCN_sens_{}_ns_{}".format(args.dataset, sens_number), map_location=device.type))
 
             if args.cuda:
                 model.cuda()
@@ -382,7 +382,7 @@ for model_name in args.model:
             'parity',
             'equality',
             'eq_odds']
-        fname = '../results/result-' + str(args.dataset) + (args.sensitive if 'pokec' in args.dataset else '')+ '-' + str(model_name) + \
+        fname = '../results/result-' + str(args.dataset) + '-' + (args.sensitive if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
                 '-' + str(args.attack_type) + (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)

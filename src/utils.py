@@ -31,6 +31,7 @@ def load_perturbed_adj(dataset_name, attack_name, ptb_rate, seed):
 
 
 def load_dataset(args, seed):
+    sens_number=args.sens_number
     if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
         if args.dataset == 'pokec_z':
             sens_attr = args.sensitive
@@ -145,7 +146,7 @@ def load_dataset(args, seed):
         else:
             print('Invalid dataset name!!')
             exit(0)
-    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr
+    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number
 
 
 def encode_onehot(labels):
@@ -280,8 +281,11 @@ def load_pokec(
     header = list(idx_features_labels.columns)
     header.remove("user_id")
 
-    for attr in 'gender AGE region'.split(): # TODO binarize AGE
-        header.remove(attr)
+    if 'region_job' in dataset:
+        for attr in 'gender AGE region'.split(): # TODO binarize AGE
+            header.remove(attr)
+    else:
+        header.remove(sens_attr)
     header.remove(predict_attr)
 
     features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
