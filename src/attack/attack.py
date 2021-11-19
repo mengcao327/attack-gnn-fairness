@@ -1,7 +1,7 @@
 from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
-from attack.sp_increase import SPI_heuristic
+from attack.sp_increase import SPI_heuristic, MetaSPI
 from structack.structack import build_custom
 import structack.node_selection as ns
 import structack.node_connection as nc
@@ -79,12 +79,18 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
     n_perturbations = int(ptb_rate * (adj.sum() // 2))
     print(f'n_perturbations = {n_perturbations}')
 
-    if model_builder == build_metattack or model_builder == build_prbcd:
+    if model_builder == build_metattack or model_builder == build_metaspi or model_builder == build_prbcd:
         adj, features, labels = preprocess(adj, sp.coo_matrix(features.cpu().numpy()), labels.cpu().numpy(),
                                            preprocess_adj=False)
-
-    # build the model
-    model = model_builder(adj, features, labels, idx_train, idx_test, device)
+    elif model_builder == build_MetaDiscriminator:
+        sens = torch.FloatTensor(sens).type(torch.LongTensor).to(device)
+    print(sens)
+    if model_builder == build_MetaDiscriminator:
+        # build the model
+        model = model_builder(adj, features, sens, idx_train, idx_test, device)
+    else:
+        # build the model
+        model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
     modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
@@ -109,10 +115,54 @@ def build_metattack(adj=None, features=None, labels=None, idx_train=None, idx_te
     return model
 
 
+def build_metaspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    lambda_ = 1
+
+    # Setup Surrogate Model
+    surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
+                    dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
+    surrogate = surrogate.to(device)
+    surrogate.fit(features, adj, labels, idx_train)
+    print(f'{torch.cuda.device_count()} GPUs available')
+    print('built surrogate')
+    model = MetaSPI(model=surrogate, nnodes=adj.shape[0], feature_shape=features.shape,
+                      attack_structure=True, attack_features=False, device=device, lambda_=lambda_, lr=0.01)
+    print('built model')
+    model = model.to(device)
+    print('to device')
+    return model
+
+
+def build_MetaDiscriminator(adj=None, features=None, sens=None, idx_train=None, idx_test=None, device=None):
+    lambda_ = 0.5
+
+    # Setup Surrogate Model
+    surrogate = GCN(nfeat=features.shape[1], nclass=sens.max().item() + 1, nhid=16,
+                    dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
+    surrogate = surrogate.to(device)
+    surrogate.fit(features, adj, sens, idx_train)
+    print(f'{torch.cuda.device_count()} GPUs available')
+    print('built surrogate')
+    model = Metattack(model=surrogate, nnodes=adj.shape[0], feature_shape=features.shape,
+                      attack_structure=True, attack_features=False, device=device, lambda_=lambda_, lr=0.005)
+    print('built model')
+    model = model.to(device)
+    print('to device')
+    return model
+
+
 def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(features, adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
     return to_scipy(model.modified_adj)
 
+
+def attack_metaspi(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(features, adj, labels, sens, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
+    return to_scipy(model.modified_adj)
+
+def attack_MetaDiscriminator(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(features, adj, sens, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
+    return to_scipy(model.modified_adj)
 
 # from rgnn_at_scale.attacks import create_attack
 # from rgnn_at_scale.models.gcn import GCN as prGCN
@@ -165,9 +215,9 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'spih':build_SPI_heuristic}
+              'prbcd': build_prbcd, 'spih':build_SPI_heuristic, 'metaspi':build_metaspi, 'MetaDiscriminator':build_MetaDiscriminator}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic}
+               'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic, 'metaspi': attack_metaspi, 'MetaDiscriminator':attack_MetaDiscriminator}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:

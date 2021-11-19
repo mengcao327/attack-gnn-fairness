@@ -382,7 +382,7 @@ for model_name in args.model:
             'parity',
             'equality',
             'eq_odds']
-        fname = '../results/result-' + str(args.dataset) + '-' + (args.sensitive if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
+        fname = '../results/result-' + str(args.dataset) + (('-'+args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
                 '-' + str(args.attack_type) + (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
