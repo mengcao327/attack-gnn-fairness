@@ -1,7 +1,7 @@
 from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
-from attack.sp_increase import SPI_heuristic, MetaSPI
+from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI
 from structack.structack import build_custom
 import structack.node_selection as ns
 import structack.node_connection as nc
@@ -27,6 +27,8 @@ def build_sacide(adj=None, features=None, labels=None, idx_train=None, idx_test=
 def build_SPI_heuristic(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return SPI_heuristic()
 
+def build_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return RewireSPI()
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -47,6 +49,12 @@ def attack_sacide(model, adj, features, labels, n_perturbations, idx_train, idx_
 
 
 def attack_SPI_heuristic(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_rewirespi(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, labels, sens, n_perturbations)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
@@ -215,9 +223,9 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'spih':build_SPI_heuristic, 'metaspi':build_metaspi, 'MetaDiscriminator':build_MetaDiscriminator}
+              'prbcd': build_prbcd, 'spih':build_SPI_heuristic, 'metaspi':build_metaspi, 'MetaDiscriminator':build_MetaDiscriminator, 'rspi':build_rewirespi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic, 'metaspi': attack_metaspi, 'MetaDiscriminator':attack_MetaDiscriminator}
+               'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic, 'metaspi': attack_metaspi, 'MetaDiscriminator':attack_MetaDiscriminator, 'rspi':attack_rewirespi}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:

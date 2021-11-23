@@ -9,6 +9,103 @@ import torch
 from torch import optim
 from torch.nn import functional as F
 
+
+class RewireSPI(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(RewireSPI, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                        attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'RewireSPI does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        TODO: rewires links of subject nodes from unwanted y values to wanted y values
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+
+        n_remove = n_perturbations // 2
+        n_remaining = n_perturbations - n_remove
+
+        removable_edges = [[e[0], e[1]] for e in G.edges() if y[e[0]] == y[e[1]]]
+        G_rem = nx.from_edgelist(removable_edges)
+
+        nodes_y1s0_cand = [u for u in nodes_y1s0 if
+                           G_rem.degree(u) != 0]  # nodes from nodes_y1s0 that do have edges in G_rem
+        nodes_y0s1_cand = [u for u in nodes_y0s1 if
+                           G_rem.degree(u) != 0]  # nodes from nodes_y0s1 that do have edges in G_rem
+
+        # equally attack both sets
+        n_perturbations_s0 = n_remaining // 2
+        n_perturbations_s1 = n_remaining - n_perturbations_s0
+
+        subject_s0 = list(np.random.choice(nodes_y1s0_cand, n_perturbations_s0))
+        subject_s1 = list(np.random.choice(nodes_y0s1_cand, n_perturbations_s1))
+
+        subject = subject_s0 + subject_s1
+
+        influencer_s0 = list(np.random.choice(nodes_y0s0 + nodes_y0s1, n_perturbations_s0))
+        influencer_s1 = list(np.random.choice(nodes_y1s1 + nodes_y1s0, n_perturbations_s1))
+        influencer = influencer_s0 + influencer_s1
+
+        print(len(influencer_s0))
+        print(len(influencer_s1))
+        print(len(subject_s0))
+        print(len(subject_s1))
+
+        unwanted = [np.random.choice(list(G_rem.neighbors(u))) for u in subject]
+
+        # print(subject)
+        # print(influencer)
+
+        print(len(subject))
+        print(len(influencer))
+
+        assert (len(subject) == len(influencer))
+
+        print(f'{modified_adj[subject, influencer].nnz} edges already exist')
+
+        modified_adj[subject, influencer] = 1
+        modified_adj[influencer, subject] = 1
+
+        modified_adj[subject, unwanted] = 0
+        modified_adj[unwanted, subject] = 0
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+
 class SPI_heuristic(BaseAttack):
 
     def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
@@ -126,10 +223,11 @@ class MetaSPI(Metattack):
                ll_cutoff=0.004):
         s1 = sens.sum()
         s0 = len(sens) - s1
-        self.sens_norm = (1/s0) - (1/s0+1/s1)*sens
+        self.sens_norm = (1 / s0) - (1 / s0 + 1 / s1) * sens
         print(f'sens_norm = {self.sens_norm}')
 
-        return super().attack(ori_features, ori_adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=True, ll_cutoff=0.004)
+        return super().attack(ori_features, ori_adj, labels, idx_train, idx_unlabeled, n_perturbations,
+                              ll_constraint=True, ll_cutoff=0.004)
 
     def get_meta_grad(self, features, adj_norm, idx_train, idx_unlabeled, labels, labels_self_training):
 
@@ -147,9 +245,9 @@ class MetaSPI(Metattack):
         yhat = torch.max(F.sigmoid(hidden), dim=1).values
 
         # print(output)
-        loss_labeled = -10000*yhat[idx_train].dot(self.sens_norm[idx_train])**2
+        loss_labeled = -10000 * yhat[idx_train].dot(self.sens_norm[idx_train]) ** 2
         loss_unlabeled = F.nll_loss(output[idx_unlabeled], labels_self_training[idx_unlabeled])
-        loss_test_val = -10000*yhat[idx_unlabeled].dot(self.sens_norm[idx_unlabeled])**2
+        loss_test_val = -10000 * yhat[idx_unlabeled].dot(self.sens_norm[idx_unlabeled]) ** 2
 
         if self.lambda_ == 1:
             attack_loss = loss_labeled
@@ -171,7 +269,6 @@ class MetaSPI(Metattack):
         return adj_grad, feature_grad
 
 
-
 class MetaDiscriminator(Metattack):
     """
     Attempts to increase the statistical parity by meta learning
@@ -180,7 +277,7 @@ class MetaDiscriminator(Metattack):
     def __init__(self, model, nnodes, feature_shape=None, attack_structure=True, attack_features=False, device='cpu',
                  with_bias=False, lambda_=0.5, train_iters=100, lr=0.1, momentum=0.9):
         super(MetaDiscriminator, self).__init__(model, nnodes, feature_shape, attack_structure, attack_features, device,
-                                      with_bias, lambda_, train_iters, lr, momentum)
+                                                with_bias, lambda_, train_iters, lr, momentum)
 
         assert not self.attack_features, 'SPI_heuristic does NOT support attacking features'
 
@@ -210,7 +307,8 @@ class MetaDiscriminator(Metattack):
             attack_loss = self.lambda_ * loss_labeled + (1 - self.lambda_) * loss_unlabeled
 
         print('GCN loss on unlabled data: {}'.format(loss_test_val.item()))
-        print('GCN acc on unlabled data: {}'.format(utils.accuracy(output[idx_unlabeled], labels[idx_unlabeled]).item()))
+        print(
+            'GCN acc on unlabled data: {}'.format(utils.accuracy(output[idx_unlabeled], labels[idx_unlabeled]).item()))
         print('attack loss: {}'.format(attack_loss.item()))
 
         adj_grad, feature_grad = None, None
@@ -219,4 +317,3 @@ class MetaDiscriminator(Metattack):
         if self.attack_features:
             feature_grad = torch.autograd.grad(attack_loss, self.feature_changes, retain_graph=True)[0]
         return adj_grad, feature_grad
-
