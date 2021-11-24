@@ -4,6 +4,7 @@ import scipy.sparse as sp
 import networkx as nx
 from deeprobust.graph.global_attack import BaseAttack, Metattack
 
+from deeprobust.graph.defense import GCN
 from deeprobust.graph import utils
 import torch
 from torch import optim
@@ -18,7 +19,35 @@ class RewireSPI(BaseAttack):
 
         assert not self.attack_features, 'RewireSPI does NOT support attacking features'
 
-    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+    def test_surrogate(self, adj, features, labels, sens, idx_train, device):
+        # Setup Surrogate Model
+        surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
+                        dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
+        surrogate = surrogate.to(device)
+        surrogate.fit(features, adj, labels, idx_train)
+        y = surrogate.predict(features, adj)
+        y = y.max(1)[1]
+
+        y1 = y > .5
+        s1 = sens == 1
+        s0 = sens == 0
+        y0 = y <= .5
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('result distribution:')
+        print(f'{sum(y0s0) / all:.2f}|{sum(y0s1) / all:.2f}\n{sum(y1s0) / all:.2f}|{sum(y1s1) / all:.2f}')
+        print(f'dSP = {abs(sum(y1s0)/sum(s0)-sum(y1s1)/sum(s1))}')
+        print('-----------------------')
+
+        return torch.tensor(y > 0.5).type_as(labels)
+
+    def attack(self, ori_adj, features, y, s, idx_train, n_perturbations, **kwargs):
         """
         TODO: rewires links of subject nodes from unwanted y values to wanted y values
         :param y:
@@ -30,6 +59,8 @@ class RewireSPI(BaseAttack):
         """
         modified_adj = ori_adj.tolil()
         n = len(y)
+
+        y = self.test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
 
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
@@ -45,7 +76,7 @@ class RewireSPI(BaseAttack):
         all = sum(y0s0 + y1s0 + y0s1 + y1s1)
 
         print('initial distribution:')
-        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print(f'{sum(y0s0) / all:.2f}|{sum(y0s1) / all:.2f}\n{sum(y1s0) / all:.2f}|{sum(y1s1) / all:.2f}')
         print('-----------------------')
 
         G = nx.from_scipy_sparse_matrix(ori_adj)
@@ -54,6 +85,22 @@ class RewireSPI(BaseAttack):
         nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
         nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
         nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+
+        def avg_deg(nodes):
+            return np.mean(np.array([G.degree(u) for u in nodes]))
+
+        print('Average degree')
+        print(f'{avg_deg(nodes_y0s0):.2f}|{avg_deg(nodes_y0s1):.2f}\n{avg_deg(nodes_y1s0):.2f}|'
+              f'{avg_deg(nodes_y1s1):.2f}')
+
+        def avg_hom(nodes):
+            return np.mean(np.array(
+                [len([v for v in G.neighbors(u) if y[v] == y[u]]) / len([v for v in G.neighbors(u) if y[v] != -1]) for u
+                 in nodes]))
+
+        print('Average homophily')
+        print(f'{avg_hom(nodes_y0s0):.2f}|{avg_hom(nodes_y0s1):.2f}\n{avg_hom(nodes_y1s0):.2f}|'
+              f'{avg_hom(nodes_y1s1):.2f}')
 
         n_remove = n_perturbations // 2
         n_remaining = n_perturbations - n_remove
@@ -75,8 +122,8 @@ class RewireSPI(BaseAttack):
 
         subject = subject_s0 + subject_s1
 
-        influencer_s0 = list(np.random.choice(nodes_y0s0 + nodes_y0s1, n_perturbations_s0))
-        influencer_s1 = list(np.random.choice(nodes_y1s1 + nodes_y1s0, n_perturbations_s1))
+        influencer_s0 = list(np.random.choice(nodes_y0s0, n_perturbations_s0))
+        influencer_s1 = list(np.random.choice(nodes_y1s1, n_perturbations_s1))
         influencer = influencer_s0 + influencer_s1
 
         print(len(influencer_s0))
@@ -102,8 +149,14 @@ class RewireSPI(BaseAttack):
         modified_adj[subject, unwanted] = 0
         modified_adj[unwanted, subject] = 0
 
+        G = nx.from_scipy_sparse_matrix(modified_adj)
+        print('Average homophily')
+        print(f'{avg_hom(nodes_y0s0):.2f}|{avg_hom(nodes_y0s1):.2f}\n{avg_hom(nodes_y1s0):.2f}|'
+              f'{avg_hom(nodes_y1s1):.2f}')
+
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
+        self.test_surrogate(modified_adj, features, y, s, idx_train, device=self.device)
 
 
 class SPI_heuristic(BaseAttack):

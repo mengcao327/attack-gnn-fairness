@@ -55,7 +55,7 @@ def attack_SPI_heuristic(model, adj, features, labels, n_perturbations, idx_trai
 
 
 def attack_rewirespi(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
-    model.attack(adj, labels, sens, n_perturbations)
+    model.attack(adj, features, labels, sens, idx_train, n_perturbations)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
 
