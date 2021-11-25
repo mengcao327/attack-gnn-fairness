@@ -1,7 +1,7 @@
 from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
-from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireIterativePerturbationSPI
+from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI
 from structack.structack import build_custom
 import structack.node_selection as ns
 import structack.node_connection as nc
@@ -31,7 +31,7 @@ def build_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_te
     return RewireSPI()
 
 def build_iter1(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RewireIterativePerturbationSPI()
+    return RewireMetropolisHastingSPI()
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -228,11 +228,11 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
               'prbcd': build_prbcd, 'spih':build_SPI_heuristic, 'metaspi':build_metaspi,
               'MetaDiscriminator':build_MetaDiscriminator, 'rspis':build_rewirespi,
-              'iter1':build_iter1}
+              'iter2':build_iter1}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
                'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic, 'metaspi': attack_metaspi,
                'MetaDiscriminator':attack_MetaDiscriminator, 'rspis':attack_rewirespi,
-               'iter1':attack_rewirespi}
+               'iter2':attack_rewirespi}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:

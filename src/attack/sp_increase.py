@@ -49,15 +49,18 @@ def test_surrogate(adj, features, labels, sens, idx_train, device):
     return torch.tensor(y > 0.5).type_as(labels)
 
 
-EDGE_BATCH = 10000
-QUERY_PER_TURN = 10
+EDGE_BATCH = 100
+FIT_FREQ = 10
+# (1-TOLERANCE) defines how much improvement we wish to have on each iteration
+# if TOLERANCE is .7, it means our best hope is a 30% improvement
+TOLERANCE = .7
 
 
-class BaseIterativePerturbationSPI(BaseAttack):
+class BaseMetropolisHastingSPI(BaseAttack):
 
     def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
-        super(BaseIterativePerturbationSPI, self).__init__(model, nnodes, attack_structure=attack_structure,
-                                                           attack_features=attack_features, device=device)
+        super(BaseMetropolisHastingSPI, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                                       attack_features=attack_features, device=device)
 
         assert not self.attack_features, 'IterativePerturbationSPI does NOT support attacking features'
 
@@ -78,17 +81,18 @@ class BaseIterativePerturbationSPI(BaseAttack):
         n_remaining = n_perturbations
 
         print(f'{n_perturbations} perturbations in {math.ceil(n_perturbations / EDGE_BATCH)} turns')
-        iter = 1
+        iter = 0
         while n_remaining > 0:
             # set the number of perturbations in this turn
             B = min((n_remaining, EDGE_BATCH))
-            n_remaining -= B
             print(f'iter {iter}, {B} perturbations')
 
             # Train a surrogate on the current graph
-            # Maybe we could only train every couple of turns
-            print('Fitting surrogate')
-            self.surrogate = fit_surrogate(modified_adj, features, labels, idx_train, device=self.device)
+            if iter % FIT_FREQ == 0:
+                print('Fitting surrogate')
+                self.surrogate = fit_surrogate(modified_adj, features, labels, idx_train, device=self.device)
+            iter += 1
+
             print('Obtaining predictions')
             y = self.surrogate.predict(features, modified_adj)
             y = y.max(1)[1]
@@ -97,26 +101,27 @@ class BaseIterativePerturbationSPI(BaseAttack):
             print(f'Curr dSP = {dSP:.4f}')
 
             # propose B perturbations
-            print('Building perturbed graphs proposals')
-            proposed_adj = [self.propose_perturbation(modified_adj, features, y, s, idx_train, B) for _ in
-                            range(QUERY_PER_TURN)]
+            print('Building perturbed graph proposal')
+            proposed_adj = self.propose_perturbation(modified_adj, features, y, s, idx_train, B)
 
-            # compute the statistical parity on each
+
+            # compute the statistical parity
             print('Computing statistical parity')
-            proposed_sp = [compute_statistical_parity(s, self.surrogate.predict(features, adj).max(1)[1]) for adj in proposed_adj]
+            proposed_sp = compute_statistical_parity(s, self.surrogate.predict(features, proposed_adj).max(1)[1])
+            print(f'Proposed dSP = {proposed_sp:.4f}')
 
-            # Pick the proposal with the highest statistical parity
-            selected_idx = np.argmax(proposed_sp) # might also allow lower dSP just to explore the space
-            print(f'Best dSP = {proposed_sp[selected_idx]:.4f}')
+            # Another scaling idea maybe works better
+            acceptance = min(TOLERANCE * proposed_sp / dSP, 1)
+            print(f'Acceptance {acceptance:.2f}')
+            # flip a coin!
+            if acceptance > random.uniform(0, 1):
+                # update the modified_adj and continue
+                modified_adj = proposed_adj
+                n_remaining -= B
+                print('Accepted')
+            else:
+                print('Rejected')
 
-            # all proposals failed to increase the statistical parity
-            if proposed_sp[selected_idx] < dSP:
-                print('Failed to find a solution')
-                # Currently we're just rejecting and continuing
-                continue
-
-            # update the modified_adj and continue
-            modified_adj = proposed_adj[selected_idx]
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
 
@@ -124,7 +129,7 @@ class BaseIterativePerturbationSPI(BaseAttack):
         pass
 
 
-class RewireIterativePerturbationSPI(BaseIterativePerturbationSPI):
+class RewireMetropolisHastingSPI(BaseMetropolisHastingSPI):
 
     def propose_perturbation(self, adj, features, y, s, idx_train, B):
 
