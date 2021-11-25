@@ -17,7 +17,7 @@ def fit_surrogate(adj, features, labels, idx_train, device):
     surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
                     dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
     surrogate = surrogate.to(device)
-    surrogate.fit(features, adj, labels, idx_train)
+    surrogate.fit(features, adj, labels, idx_train, train_iters=500)
     return surrogate
 
 
@@ -54,6 +54,8 @@ FIT_FREQ = 10
 # (1-TOLERANCE) defines how much improvement we wish to have on each iteration
 # if TOLERANCE is .7, it means our best hope is a 30% improvement
 TOLERANCE = .7
+IMPROVEMENT_MARGIN = .001 # TODO make paramters of the class
+
 
 
 class BaseMetropolisHastingSPI(BaseAttack):
@@ -80,9 +82,16 @@ class BaseMetropolisHastingSPI(BaseAttack):
         modified_adj = ori_adj
         n_remaining = n_perturbations
 
-        print(f'{n_perturbations} perturbations in {math.ceil(n_perturbations / EDGE_BATCH)} turns')
+        min_iter = math.ceil(n_perturbations / EDGE_BATCH)
+        print(f'{n_perturbations} perturbations in {min_iter} turns')
+        max_iter = min_iter*5
+        accepted_moves = 0
         iter = 0
         while n_remaining > 0:
+
+            if iter >= max_iter:
+                print(f'Reached max iterations {iter}')
+                break
             # set the number of perturbations in this turn
             B = min((n_remaining, EDGE_BATCH))
             print(f'iter {iter}, {B} perturbations')
@@ -110,18 +119,22 @@ class BaseMetropolisHastingSPI(BaseAttack):
             proposed_sp = compute_statistical_parity(s, self.surrogate.predict(features, proposed_adj).max(1)[1])
             print(f'Proposed dSP = {proposed_sp:.4f}')
 
-            # Another scaling idea maybe works better
-            acceptance = min(TOLERANCE * proposed_sp / dSP, 1)
-            print(f'Acceptance {acceptance:.2f}')
+            min_accept = dSP * (1-IMPROVEMENT_MARGIN)
+            max_accept = dSP * (1+IMPROVEMENT_MARGIN)
+            linear_accept = (proposed_sp - dSP) / (max_accept-min_accept)
+            print(f'Linear {linear_accept:.3f}')
+            acceptance = F.sigmoid(torch.Tensor([linear_accept])).item()
+            print(f'Acceptance {acceptance:.3f}')
             # flip a coin!
             if acceptance > random.uniform(0, 1):
                 # update the modified_adj and continue
                 modified_adj = proposed_adj
                 n_remaining -= B
                 print('Accepted')
+                accepted_moves += 1
             else:
                 print('Rejected')
-
+        print(f'Attack finished. Accepted {accepted_moves} moves.')
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
 
