@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import math
 import scipy.sparse as sp
 import networkx as nx
 from deeprobust.graph.global_attack import BaseAttack, Metattack
@@ -11,6 +12,180 @@ from torch import optim
 from torch.nn import functional as F
 
 
+def fit_surrogate(adj, features, labels, idx_train, device):
+    # Setup Surrogate Model
+    surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
+                    dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
+    surrogate = surrogate.to(device)
+    surrogate.fit(features, adj, labels, idx_train)
+    return surrogate
+
+
+def compute_statistical_parity(sens, y):
+    y1 = y > .5
+    s1 = sens == 1
+    s0 = sens == 0
+    y0 = y <= .5
+
+    y1s0 = y1 & s0
+    y1s1 = y1 & s1
+
+    # all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+    # print('result distribution:')
+    # print(f'{sum(y0s0) / all:.2f}|{sum(y0s1) / all:.2f}\n{sum(y1s0) / all:.2f}|{sum(y1s1) / all:.2f}')
+    # print(f'dSP = {abs(sum(y1s0) / sum(s0) - sum(y1s1) / sum(s1))}')
+    # print('-----------------------')
+
+    dSP = abs(sum(y1s0) / sum(s0) - sum(y1s1) / sum(s1))
+    return dSP
+
+
+def test_surrogate(adj, features, labels, sens, idx_train, device):
+    surrogate = fit_surrogate(adj, features, labels, idx_train, device)
+    y = surrogate.predict(features, adj)
+    y = y.max(1)[1]
+    print(f'dSP = {compute_statistical_parity(sens, y)}')
+    return torch.tensor(y > 0.5).type_as(labels)
+
+
+EDGE_BATCH = 10000
+QUERY_PER_TURN = 10
+
+
+class BaseIterativePerturbationSPI(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(BaseIterativePerturbationSPI, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                                           attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'IterativePerturbationSPI does NOT support attacking features'
+
+    def attack(self, ori_adj, features, labels, s, idx_train, n_perturbations, **kwargs):
+        """
+        TODO: rewires links of subject nodes from unwanted y values to wanted y values
+        :param labels:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(labels)
+
+        modified_adj = ori_adj
+        n_remaining = n_perturbations
+
+        print(f'{n_perturbations} perturbations in {math.ceil(n_perturbations / EDGE_BATCH)} turns')
+        iter = 1
+        while n_remaining > 0:
+            # set the number of perturbations in this turn
+            B = min((n_remaining, EDGE_BATCH))
+            n_remaining -= B
+            print(f'iter {iter}, {B} perturbations')
+
+            # Train a surrogate on the current graph
+            # Maybe we could only train every couple of turns
+            print('Fitting surrogate')
+            self.surrogate = fit_surrogate(modified_adj, features, labels, idx_train, device=self.device)
+            print('Obtaining predictions')
+            y = self.surrogate.predict(features, modified_adj)
+            y = y.max(1)[1]
+            dSP = compute_statistical_parity(s, y)
+            y = torch.tensor(y > 0.5).type_as(labels)
+            print(f'Curr dSP = {dSP:.4f}')
+
+            # propose B perturbations
+            print('Building perturbed graphs proposals')
+            proposed_adj = [self.propose_perturbation(modified_adj, features, y, s, idx_train, B) for _ in
+                            range(QUERY_PER_TURN)]
+
+            # compute the statistical parity on each
+            print('Computing statistical parity')
+            proposed_sp = [compute_statistical_parity(s, self.surrogate.predict(features, adj).max(1)[1]) for adj in proposed_adj]
+
+            # Pick the proposal with the highest statistical parity
+            selected_idx = np.argmax(proposed_sp) # might also allow lower dSP just to explore the space
+            print(f'Best dSP = {proposed_sp[selected_idx]:.4f}')
+
+            # all proposals failed to increase the statistical parity
+            if proposed_sp[selected_idx] < dSP:
+                print('Failed to find a solution')
+                # Currently we're just rejecting and continuing
+                continue
+
+            # update the modified_adj and continue
+            modified_adj = proposed_adj[selected_idx]
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+    def propose_perturbation(self, modified_adj, features, y, s, idx_train, B):
+        pass
+
+
+class RewireIterativePerturbationSPI(BaseIterativePerturbationSPI):
+
+    def propose_perturbation(self, adj, features, y, s, idx_train, B):
+
+        modified_adj = adj.copy()
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        G = nx.from_scipy_sparse_matrix(modified_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+
+        n_remove = B // 2
+        n_remaining = B - n_remove
+
+        removable_edges = [[e[0], e[1]] for e in G.edges() if y[e[0]] == y[e[1]]]
+        G_rem = nx.from_edgelist(removable_edges)
+
+        nodes_y1s0_cand = [u for u in nodes_y1s0 if
+                           G_rem.degree(u) != 0]  # nodes from nodes_y1s0 that do have edges in G_rem
+        nodes_y0s1_cand = [u for u in nodes_y0s1 if
+                           G_rem.degree(u) != 0]  # nodes from nodes_y0s1 that do have edges in G_rem
+
+        # equally attack both sets
+        n_perturbations_s0 = n_remaining // 2
+        n_perturbations_s1 = n_remaining - n_perturbations_s0
+
+        subject_s0 = list(np.random.choice(nodes_y1s0_cand, n_perturbations_s0))
+        subject_s1 = list(np.random.choice(nodes_y0s1_cand, n_perturbations_s1))
+
+        subject = subject_s0 + subject_s1
+
+        influencer_s0 = list(np.random.choice(nodes_y0s0, n_perturbations_s0))
+        influencer_s1 = list(np.random.choice(nodes_y1s1, n_perturbations_s1))
+        influencer = influencer_s0 + influencer_s1
+
+        unwanted = [np.random.choice(list(G_rem.neighbors(u))) for u in subject]
+
+        assert (len(subject) == len(influencer))
+
+        modified_adj[subject, influencer] = 1
+        modified_adj[influencer, subject] = 1
+
+        modified_adj[subject, unwanted] = 0
+        modified_adj[unwanted, subject] = 0
+
+        self.check_adj(modified_adj)
+        return modified_adj
+
+
 class RewireSPI(BaseAttack):
 
     def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
@@ -18,34 +193,6 @@ class RewireSPI(BaseAttack):
                                         attack_features=attack_features, device=device)
 
         assert not self.attack_features, 'RewireSPI does NOT support attacking features'
-
-    def test_surrogate(self, adj, features, labels, sens, idx_train, device):
-        # Setup Surrogate Model
-        surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
-                        dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
-        surrogate = surrogate.to(device)
-        surrogate.fit(features, adj, labels, idx_train)
-        y = surrogate.predict(features, adj)
-        y = y.max(1)[1]
-
-        y1 = y > .5
-        s1 = sens == 1
-        s0 = sens == 0
-        y0 = y <= .5
-
-        y0s0 = y0 & s0
-        y1s0 = y1 & s0
-        y0s1 = y0 & s1
-        y1s1 = y1 & s1
-
-        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
-
-        print('result distribution:')
-        print(f'{sum(y0s0) / all:.2f}|{sum(y0s1) / all:.2f}\n{sum(y1s0) / all:.2f}|{sum(y1s1) / all:.2f}')
-        print(f'dSP = {abs(sum(y1s0)/sum(s0)-sum(y1s1)/sum(s1))}')
-        print('-----------------------')
-
-        return torch.tensor(y > 0.5).type_as(labels)
 
     def attack(self, ori_adj, features, y, s, idx_train, n_perturbations, **kwargs):
         """
@@ -58,9 +205,8 @@ class RewireSPI(BaseAttack):
         :return:
         """
         modified_adj = ori_adj.tolil()
-        n = len(y)
 
-        y = self.test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
+        y = test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
 
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
@@ -156,7 +302,7 @@ class RewireSPI(BaseAttack):
 
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
-        self.test_surrogate(modified_adj, features, y, s, idx_train, device=self.device)
+        test_surrogate(modified_adj, features, y, s, idx_train, device=self.device)
 
 
 class SPI_heuristic(BaseAttack):
