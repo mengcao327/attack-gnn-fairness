@@ -38,7 +38,7 @@ parser.add_argument('--val_percent', type=float, default=0.25,
 '''
             Model args
 '''
-parser.add_argument('--model', type=str, default=['gat'], nargs='+',
+parser.add_argument('--model', type=str, default=['gcn'], nargs='+',
                     choices=['gcn', 'gat', 'gsage', 'fairgnn'])
 parser.add_argument('--lr', type=float, default=0.001,
                     help='Initial learning rate.')
@@ -91,7 +91,7 @@ parser.add_argument('--sens_number', type=int, default=200,
 '''
             Optimization args
 '''
-parser.add_argument('--epochs', type=int, default=500,
+parser.add_argument('--epochs', type=int, default=1000,
                     help='Number of epochs to train.')
 parser.add_argument('--fastmode', action='store_true', default=False,
                     help='Validate during training pass.')
@@ -132,11 +132,14 @@ for model_name in args.model:
             if args.attack_type != 'none':
                 adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
                              seed, dataset, sens_attr)
+                print("edge dist. after attack:")
+                check_dataset(dataset, adj, labels, sens, idx_train, idx_val, idx_test)
 
             print("Test samples:", len(idx_test))
             if sens_attr:
                 sens[sens > 0] = 1
-
+            # from torch_geometric.utils import dropout_adj, convert
+            # edge_index = convert.from_scipy_sparse_matrix(adj)[0]
             G = dgl.from_scipy(adj)
             if args.cuda:
                 G = G.to(device)
@@ -194,6 +197,7 @@ for model_name in args.model:
                 idx_val = idx_val.cuda()
                 idx_test = idx_test.cuda()
                 idx_sens_train = idx_sens_train.cuda()
+
             optimizer = optim.Adam(model.parameters(),
                                    lr=args.lr, weight_decay=args.weight_decay)
             loss_fcn = torch.nn.BCEWithLogitsLoss()
@@ -391,11 +395,11 @@ for model_name in args.model:
         f.close()
 
         # check loss ---
-        #     import matplotlib.pyplot as plt
-        #     x = np.arange(0, len(loss_all))
-        #     plt.figure()
-        #     plt.plot(x, loss_all)
-        #     plt.title("loss " + args.dataset)
-        #     plt.xlabel('epochs')
-        #     plt.ylabel('loss')
-        #     plt.show()
+        # import matplotlib.pyplot as plt
+        # x = np.arange(0, len(loss_all))
+        # plt.figure()
+        # plt.plot(x, loss_all)
+        # plt.title("loss " + args.dataset)
+        # plt.xlabel('epochs')
+        # plt.ylabel('loss')
+        # plt.show()

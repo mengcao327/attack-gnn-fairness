@@ -322,8 +322,7 @@ def load_pokec(
     adj = _A.tocoo()
     print(f"{adj.shape[0]} of nodes after selecting LCC")
     # features = normalize(features)
-    # so the true number of edges should be (nnz-selfloop)/2 in adj
-    adj = adj + sp.eye(adj.shape[0])
+
 
     features = torch.FloatTensor(np.array(features.todense()))
     labels = torch.LongTensor(labels)
@@ -350,7 +349,9 @@ def load_pokec(
     print("num nodes with sa:", len(sens_idx))
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
 
-    check_dataset(labels, sens, idx_train, idx_val, idx_test)
+    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
+    # so the true number of edges should be (nnz-selfloop)/2 in adj
+    adj = adj + sp.eye(adj.shape[0])  # add self loop
 
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
@@ -410,24 +411,71 @@ def preprocess_pokec_complete_accounts(adj, features, labels, sens, seed):
 
     return adj, features, labels, torch.LongTensor(idx_train), torch.LongTensor(idx_val), torch.LongTensor(idx_test), sens
 
-def check_dataset(labels,sens,idx_train,idx_val,idx_test):
+import scipy.sparse
+def csr_matrix_indices(S):
+    """
+    Return a list of the indices of nonzero entries of a csr_matrix S
+    """
+    major_dim, minor_dim = S.shape
+    minor_indices = S.indices
+
+    major_indices = np.empty(len(minor_indices), dtype=S.indices.dtype)
+    scipy.sparse._sparsetools.expandptr(major_dim, S.indptr, major_indices)
+
+    return zip(major_indices, minor_indices)
+
+def check_dataset(dataset,adj,labels,sens,idx_train,idx_val,idx_test):
+    # if dataset not in ['nba','region_job','region_job_2']:
+    adj=adj.tocoo()
+    row,col=adj.row,adj.col
+    print("num edges:",len(row)//2)
     label_idx = np.where(labels >= 0)[0]
 
     print("num labels:", len(label_idx))
     # check label balancing
-    label_idx_0 = np.where(labels == 0)[0]
-    label_idx_1 = np.where(labels == 1)[0]
+    label_idx_0 = set(np.where(labels == 0)[0])
+    label_idx_1 = set(np.where(labels == 1)[0])
     print("num labels 0:", len(label_idx_0))
-    print("num labels 1:", len(label_idx) - len(label_idx_0))
+    # print("num labels 1:", len(label_idx) - len(label_idx_0))
     print("num labels 1:", len(label_idx_1))
 
 
     sens_idx = set(np.where(sens >= 0)[0])
     print("num nodes with sa:", len(sens_idx))
+
+    idx_label_sens=set(label_idx)&sens_idx
+    print("num nodes with label and sa:", len(idx_label_sens))
     # check sa
     sens_idx_0 = set(np.where(sens == 0)[0])
+    sens_idx_1 = set(np.where(sens == 1)[0])
     print("num nodes with sa=0:", len(sens_idx_0))
-    print("num nodes with sa=1:", len(sens_idx) - len(sens_idx_0))
+    print("num nodes with sa=1:", len(sens_idx_1))
+
+    idx_y1s1=sens_idx_1&label_idx_1
+    idx_y1s0=sens_idx_0&label_idx_1
+    idx_y0s1=sens_idx_1&label_idx_0
+    idx_y0s0=sens_idx_0&label_idx_0
+    print("y1s1:",len(idx_y1s1)/len(idx_label_sens))
+    print("y1s0:",len(idx_y1s0)/len(idx_label_sens))
+    print("y0s1:",len(idx_y0s1)/len(idx_label_sens))
+    print("y0s0:",len(idx_y0s0)/len(idx_label_sens))
+
+    # edges in 16 groups, row order: y1s1,y1s0,y0s1,y0s0
+    node_set=[idx_y1s1,idx_y1s0,idx_y0s1,idx_y0s0]
+    homo_edges=np.zeros((4,4))
+    for i in range(len(row)):
+        node_exist_row=True in [row[i] in node_set[k] for k in range(4)]
+        if node_exist_row:
+            node_exist_col=True in [col[i] in node_set[k] for k in range(4)]
+            if node_exist_col:
+                row_h=[row[i] in node_set[k] for k in range(4)].index(True)
+                col_h=[col[i] in node_set[k] for k in range(4)].index(True)
+                homo_edges[row_h][col_h]+=1
+    print(homo_edges)
+
+    # fname=dataset+"_homo_edges.csv"
+    # np.savetxt(fname,homo_edges,delimiter=",")
+
 
     print(f"Data splits: {len(idx_train)} train, {len(idx_val)} val, {len(idx_test)} test. ")
 
@@ -492,7 +540,7 @@ def load_dblp(dataset,
     # np.where(sum(features[:])==0) ==> 2492,2527,2521,2529 columns with all zeros and columns after 2492 are very sparse
     # eliminate them since normalization over all zeros will generate NAN
     features=features[:,:2491]
-    adj = adj + sp.eye(adj.shape[0])
+
     random.seed(seed)
     features = torch.FloatTensor(np.array(features.todense()))
     # features= torch.FloatTensor(np.random.random((adj.shape[0],1000)))
@@ -515,7 +563,8 @@ def load_dblp(dataset,
 
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
 
-    check_dataset(labels,sens,idx_train,idx_val,idx_test)
+    check_dataset(dataset,adj,labels,sens,idx_train,idx_val,idx_test)
+    adj = adj + sp.eye(adj.shape[0])
 
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
@@ -802,7 +851,7 @@ def load_credit(
 
     # build symmetric adjacency matrix
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
-    adj = adj + sp.eye(adj.shape[0])
+
 
     features = torch.FloatTensor(np.array(features.todense()))
     labels = torch.LongTensor(labels)
@@ -835,7 +884,8 @@ def load_credit(
 
 
     sens = idx_features_labels[sens_attr].values.astype(int)
-    check_dataset(labels, sens, idx_train, idx_val, idx_test)
+    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
+    adj = adj + sp.eye(adj.shape[0])
     sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
@@ -906,7 +956,7 @@ def load_bail(
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
 
     # features = normalize(features)
-    adj = adj + sp.eye(adj.shape[0])
+
 
     features = torch.FloatTensor(np.array(features.todense()))
     labels = torch.LongTensor(labels)
@@ -937,7 +987,8 @@ def load_bail(
     #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
-    check_dataset(labels, sens, idx_train, idx_val, idx_test)
+    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
+    adj = adj + sp.eye(adj.shape[0])
     sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
@@ -960,6 +1011,7 @@ def load_german(
         val_percent=0.25,
         sens_number=200,
         seed=20):
+    label_number=100
     # print('Loading {} dataset from {}'.format(dataset, path))
     idx_features_labels = pd.read_csv(
         os.path.join(path, "{}.csv".format(dataset)))
@@ -1009,39 +1061,35 @@ def load_german(
     # build symmetric adjacency matrix
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
 
-    adj = adj + sp.eye(adj.shape[0])
+
 
     features = torch.FloatTensor(np.array(features.todense()))
     labels = torch.LongTensor(labels)
 
     import random
     random.seed(seed)
-    label_idx = np.where(labels >= 0)[0]
-    random.shuffle(label_idx)
-    idx_train = label_idx[:int(train_percent * len(label_idx))]
-    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
-    idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
-    # label_idx_0 = np.where(labels == 0)[0]
-    # label_idx_1 = np.where(labels == 1)[0]
-    # random.shuffle(label_idx_0)
-    # random.shuffle(label_idx_1)
-    #
-    # idx_train = np.append(label_idx_0[:min(int(0.5 *
-    #                                            len(label_idx_0)), label_number //
-    #                                        2)], label_idx_1[:min(int(0.5 *
-    #                                                                  len(label_idx_1)), label_number //
-    #                                                              2)])
-    # idx_val = np.append(label_idx_0[int(0.5 *
-    #                                     len(label_idx_0)):int(0.75 *
-    #                                                           len(label_idx_0))], label_idx_1[int(0.5 *
-    #                                                                                               len(label_idx_1)):int(
-    #     0.75 *
-    #     len(label_idx_1))])
-    # idx_test = np.append(label_idx_0[int(
-    #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
+    # ---
+    # label_idx = np.where(labels >= 0)[0]
+    # random.shuffle(label_idx)
+    # idx_train = label_idx[:int(train_percent * len(label_idx))]
+    # idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
+    # idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
+    # ---
+    label_idx_0 = np.where(labels == 0)[0]
+    label_idx_1 = np.where(labels == 1)[0]
+    random.shuffle(label_idx_0)
+    random.shuffle(label_idx_1)
+    label_idx_1=label_idx_1[:len(label_idx_0)]  # make train set balance
+
+    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
+                          label_idx_1[:int(0.5 * len(label_idx_1))])
+    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))],
+                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
+    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
 
     sens = idx_features_labels[sens_attr].values.astype(int)
-    check_dataset(labels, sens, idx_train, idx_val, idx_test)
+    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
+    adj = adj + sp.eye(adj.shape[0])
     sens_idx = set(np.where(sens >= 0)[0])
     sens = torch.FloatTensor(sens)
     idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
