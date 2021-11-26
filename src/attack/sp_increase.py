@@ -4,6 +4,7 @@ import math
 import scipy.sparse as sp
 import networkx as nx
 from deeprobust.graph.global_attack import BaseAttack, Metattack
+from deeprobust.graph.global_attack import Random
 
 from deeprobust.graph.defense import GCN
 from deeprobust.graph import utils
@@ -49,13 +50,12 @@ def test_surrogate(adj, features, labels, sens, idx_train, device):
     return torch.tensor(y > 0.5).type_as(labels)
 
 
-EDGE_BATCH = 100
+EDGE_BATCH = 1000
 FIT_FREQ = 10
 # (1-TOLERANCE) defines how much improvement we wish to have on each iteration
 # if TOLERANCE is .7, it means our best hope is a 30% improvement
 TOLERANCE = .7
-IMPROVEMENT_MARGIN = .001 # TODO make paramters of the class
-
+IMPROVEMENT_MARGIN = .001  # TODO make paramters of the class
 
 
 class BaseMetropolisHastingSPI(BaseAttack):
@@ -84,7 +84,7 @@ class BaseMetropolisHastingSPI(BaseAttack):
 
         min_iter = math.ceil(n_perturbations / EDGE_BATCH)
         print(f'{n_perturbations} perturbations in {min_iter} turns')
-        max_iter = min_iter*5
+        max_iter = min_iter * 5
         accepted_moves = 0
         iter = 0
         while n_remaining > 0:
@@ -113,15 +113,14 @@ class BaseMetropolisHastingSPI(BaseAttack):
             print('Building perturbed graph proposal')
             proposed_adj = self.propose_perturbation(modified_adj, features, y, s, idx_train, B)
 
-
             # compute the statistical parity
             print('Computing statistical parity')
             proposed_sp = compute_statistical_parity(s, self.surrogate.predict(features, proposed_adj).max(1)[1])
             print(f'Proposed dSP = {proposed_sp:.4f}')
 
-            min_accept = dSP * (1-IMPROVEMENT_MARGIN)
-            max_accept = dSP * (1+IMPROVEMENT_MARGIN)
-            linear_accept = (proposed_sp - dSP) / (max_accept-min_accept)
+            min_accept = dSP * (1 - IMPROVEMENT_MARGIN)
+            max_accept = dSP * (1 + IMPROVEMENT_MARGIN)
+            linear_accept = (proposed_sp - dSP) / (max_accept - min_accept)
             print(f'Linear {linear_accept:.3f}')
             acceptance = F.sigmoid(torch.Tensor([linear_accept])).item()
             print(f'Acceptance {acceptance:.3f}')
@@ -142,10 +141,27 @@ class BaseMetropolisHastingSPI(BaseAttack):
         pass
 
 
+class RandomMetropolisHastingSPI(BaseMetropolisHastingSPI):
+
+    def propose_perturbation(self, adj, features, y, s, idx_train, B):
+        modified_adj = adj.copy()
+
+        n_remove = B // 2
+        n_add = B - n_remove
+
+        model = Random()
+        model.attack(modified_adj, n_remove, type='remove')
+        modified_adj = model.modified_adj
+        model.attack(modified_adj, n_add, type='add')
+        modified_adj = model.modified_adj
+
+        self.check_adj(modified_adj)
+        return modified_adj
+
+
 class RewireMetropolisHastingSPI(BaseMetropolisHastingSPI):
 
     def propose_perturbation(self, adj, features, y, s, idx_train, B):
-
         modified_adj = adj.copy()
 
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
