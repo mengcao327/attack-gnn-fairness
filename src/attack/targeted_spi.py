@@ -54,10 +54,11 @@ class TargetedSPI(BaseTargetedSPI):
 
         for i in tqdm(range(n_perturbations // n_perturbation_per_node)):
             if i % 100 == 0:
+                print(f'training surrogate on {self.device}')
                 self.surrogate = fit_surrogate(ori_adj, features, labels, idx_train, self.device)
                 targets = self.select_targets(modified_adj, features, labels, sens, idx_train, self.surrogate)
 
-            modified_adj = self.single_node_attack(features, modified_adj, labels, targets[i], idx_train, n_perturbations)
+            modified_adj = self.single_node_attack(features, modified_adj, labels, targets[i], idx_train, n_perturbation_per_node)
 
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
