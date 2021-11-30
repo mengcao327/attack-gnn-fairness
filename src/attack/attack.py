@@ -29,19 +29,19 @@ def build_SPI_heuristic(adj=None, features=None, labels=None, idx_train=None, id
     return SPI_heuristic()
 
 def build_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RewireSPI()
+    return RewireSPI(device=device)
 
 def build_iter2(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RewireMetropolisHastingSPI()
+    return RewireMetropolisHastingSPI(device=device)
 
 def build_iter3(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RandomMetropolisHastingSPI()
+    return RandomMetropolisHastingSPI(device=device)
 
 def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RandomSPI()
+    return RandomSPI(device=device)
 
 def build_target_nettackspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return NettackSPI()
+    return NettackSPI(device=device)
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -94,6 +94,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
         torch.cuda.manual_seed(seed)
 
     device = torch.device("cuda" if cuda else "cpu")
+    print(f'Device {device}')
 
     idx_unlabeled = np.union1d(idx_val, idx_test)
 
@@ -114,7 +115,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
         model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
-    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
+    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens.to(device))
     return modified_adj
 
 
@@ -250,7 +251,7 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     if attack_name in baseline_attacks:
         modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], adj, features, labels, sens,
                                           idx_train,
-                                          idx_val, idx_test, ptb_rate=ptb_rate, seed=seed)
+                                          idx_val, idx_test, ptb_rate=ptb_rate, seed=seed, cuda=torch.cuda.is_available())
         print(f'Attack finished, returning perturbed graph')
         print(f'Storing perturbed adjacency matrix at {cached_filename}.')
         sp.save_npz(cached_filename, modified_adj)

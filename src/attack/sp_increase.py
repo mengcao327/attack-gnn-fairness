@@ -11,7 +11,7 @@ from deeprobust.graph import utils
 import torch
 from torch import optim
 from torch.nn import functional as F
-from utils import *
+from attack.utils import *
 
 
 EDGE_BATCH = 1000
