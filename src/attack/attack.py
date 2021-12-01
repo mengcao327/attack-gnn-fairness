@@ -2,6 +2,7 @@ from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
 from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
+from attack.targeted_spi import RandomSPI, NettackSPI
 from structack.structack import build_custom
 import structack.node_selection as ns
 import structack.node_connection as nc
@@ -28,13 +29,19 @@ def build_SPI_heuristic(adj=None, features=None, labels=None, idx_train=None, id
     return SPI_heuristic()
 
 def build_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RewireSPI()
+    return RewireSPI(device=device)
 
 def build_iter2(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RewireMetropolisHastingSPI()
+    return RewireMetropolisHastingSPI(device=device)
 
 def build_iter3(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return RandomMetropolisHastingSPI()
+    return RandomMetropolisHastingSPI(device=device)
+
+def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return RandomSPI(device=device)
+
+def build_target_nettackspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return NettackSPI(device=device)
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -87,6 +94,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
         torch.cuda.manual_seed(seed)
 
     device = torch.device("cuda" if cuda else "cpu")
+    print(f'Device {device}')
 
     idx_unlabeled = np.union1d(idx_val, idx_test)
 
@@ -107,7 +115,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
         model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
-    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
+    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens.to(device))
     return modified_adj
 
 
@@ -231,17 +239,19 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
               'prbcd': build_prbcd, 'spih':build_SPI_heuristic, 'metaspi':build_metaspi,
               'MetaDiscriminator':build_MetaDiscriminator, 'rspis':build_rewirespi,
-              'iter3':build_iter3,'iter2':build_iter2}
+              'iter3':build_iter3,'iter2':build_iter2, 'target_randomspi':build_target_randomspi,
+              'target_nettackspi':build_target_nettackspi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
                'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic, 'metaspi': attack_metaspi,
                'MetaDiscriminator':attack_MetaDiscriminator, 'rspis':attack_rewirespi,
-               'iter3':attack_rewirespi,'iter2':attack_rewirespi}
+               'iter3':attack_rewirespi,'iter2':attack_rewirespi, 'target_randomspi':attack_rewirespi,
+               'target_nettackspi':attack_rewirespi}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:
         modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], adj, features, labels, sens,
                                           idx_train,
-                                          idx_val, idx_test, ptb_rate=ptb_rate, seed=seed)
+                                          idx_val, idx_test, ptb_rate=ptb_rate, seed=seed, cuda=torch.cuda.is_available())
         print(f'Attack finished, returning perturbed graph')
         print(f'Storing perturbed adjacency matrix at {cached_filename}.')
         sp.save_npz(cached_filename, modified_adj)
