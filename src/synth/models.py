@@ -70,7 +70,7 @@ def sensitive_attribute_connections(intra_density, overall_density_factor, seed,
     return nx.stochastic_block_model(sizes, probs, seed=seed)
 
 
-def generate_features(dimensions, labels, seed, cov_diag=.5):
+def generate_features(dimensions, labels, seed, cov_diag=.9):
     """
     Generate features between -1 and 1
     Labels can refer to any categorical feature (e.g., classes or sensitive attributes)
