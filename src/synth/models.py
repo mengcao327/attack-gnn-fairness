@@ -70,7 +70,112 @@ def sensitive_attribute_connections(intra_density, overall_density_factor, seed,
     return nx.stochastic_block_model(sizes, probs, seed=seed)
 
 
-def generate_features(dimensions, labels, seed, cov_diag=.9):
+def sensitive_attribute_same_label(intra_density, overall_density_factor, seed, cluster_size=250):
+    """
+    Assuming the groups are ordered as ['y0s0', 'y0s1', 'y1s0', 'y1s1']
+    :param intra_density:
+    :param overall_density_factor:
+    :param seed:
+    :param cluster_size:
+    :return:
+    """
+    sizes = [cluster_size] * 4
+
+    probs = np.zeros([4, 4])
+    # assign intra-density
+    for i in range(4):
+        probs[i, i] = intra_density
+        probs[i, i ^ 1] = 1-intra_density
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def label_same_sensitive_attribute(intra_density, overall_density_factor, seed, cluster_size=250):
+    """
+    Assuming the groups are ordered as ['y0s0', 'y0s1', 'y1s0', 'y1s1']
+    :param intra_density:
+    :param overall_density_factor:
+    :param seed:
+    :param cluster_size:
+    :return:
+    """
+    sizes = [cluster_size] * 4
+
+    probs = np.zeros([4, 4])
+    # assign intra-density
+    for i in range(4):
+        probs[i, i] = intra_density
+        probs[i, (i + 2) % 4] = 1-intra_density
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def cross_label_cross_sens(intra_density, overall_density_factor, seed, cluster_size=250):
+    """
+    Assuming the groups are ordered as ['y0s0', 'y0s1', 'y1s0', 'y1s1']
+    :param intra_density:
+    :param overall_density_factor:
+    :param seed:
+    :param cluster_size:
+    :return:
+    """
+    sizes = [cluster_size] * 4
+
+    probs = np.zeros([4, 4])
+    # assign intra-density
+    for i in range(4):
+        probs[i, i] = intra_density
+        probs[i, 3-i] = 1-intra_density
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def cross_label(intra_density, overall_density_factor, seed, cluster_size=250):
+    """
+    Assuming the groups are ordered as ['y0s0', 'y0s1', 'y1s0', 'y1s1']
+    :param intra_density:
+    :param overall_density_factor:
+    :param seed:
+    :param cluster_size:
+    :return:
+    """
+    sizes = [cluster_size] * 4
+
+    probs = np.zeros([4, 4])
+    # assign intra-density
+    for i in range(4):
+        probs[i, i] = intra_density
+        probs[i, 3-i] = (1-intra_density)/2
+        probs[i, (i + 2) % 4] = (1-intra_density)/2
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def uniform_with_anomaly(intra_density, a, b, common_density, overall_density_factor, seed, cluster_size=250):
+    sizes = [cluster_size] * 4
+
+    # set uniform density
+    probs = common_density*np.ones([4, 4])
+    # add some homophily
+    for i in range(4):
+        probs[i][i] += .5 * common_density
+        probs[i][i ^ 1] += .5 * common_density
+
+    # set desired cell to specified density
+    probs[a][b] = intra_density
+    probs[b][a] = intra_density
+
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+
+def generate_features(dimensions, labels, cov_diag=.5):
     """
     Generate features between -1 and 1
     Labels can refer to any categorical feature (e.g., classes or sensitive attributes)
@@ -78,7 +183,6 @@ def generate_features(dimensions, labels, seed, cov_diag=.9):
     :return:
     """
 
-    np.random.seed(seed)
     n = len(labels)
     labels = np.array(labels)
     n_labels = len(np.unique(labels))
