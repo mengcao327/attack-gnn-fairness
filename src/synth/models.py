@@ -174,6 +174,27 @@ def uniform_with_anomaly(intra_density, a, b, common_density, overall_density_fa
     return nx.stochastic_block_model(sizes, probs, seed=seed)
 
 
+def uniform_with_symmetric_anomaly(intra_density, common_density, overall_density_factor, seed, cluster_size=250):
+    sizes = [cluster_size] * 4
+
+    # set uniform density
+    probs = common_density*np.ones([4, 4])
+    # add some homophily
+    for i in range(4):
+        probs[i][i] += .5 * common_density
+        probs[i][i ^ 1] += .5 * common_density
+
+    # set desired cell to specified density
+    probs[0][3] = intra_density
+    probs[3][0] = intra_density
+    probs[1][2] = intra_density
+    probs[2][1] = intra_density
+
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
 
 def generate_features(dimensions, labels, cov_diag=.5):
     """
