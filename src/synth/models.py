@@ -161,6 +161,27 @@ def uniform_with_anomaly(intra_density, a, b, common_density, overall_density_fa
     # set uniform density
     probs = common_density*np.ones([4, 4])
     # add some homophily
+    # for i in range(4):
+    #     probs[i][i] += .5 * common_density
+    #     probs[i][i ^ 1] += .5 * common_density
+
+    # set desired cell to specified density
+    probs[a][b] = intra_density
+    probs[b][a] = intra_density
+
+    probs = probs / np.sum(probs)
+
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def uniform_with_anomaly_assortative(intra_density, a, b, common_density, overall_density_factor, seed, cluster_size=250):
+    sizes = [cluster_size] * 4
+
+    # set uniform density
+    probs = common_density*np.ones([4, 4])
+    # add some homophily
     for i in range(4):
         probs[i][i] += .5 * common_density
         probs[i][i ^ 1] += .5 * common_density
@@ -169,6 +190,68 @@ def uniform_with_anomaly(intra_density, a, b, common_density, overall_density_fa
     probs[a][b] = intra_density
     probs[b][a] = intra_density
 
+    probs = probs / np.sum(probs)
+
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def symmetric_cross_same(intra_density, common_density, overall_density_factor, seed, cluster_size=250):
+    sizes = [cluster_size] * 4
+
+    # set uniform density
+    probs = common_density*np.ones([4, 4])
+    # add some homophily
+    # for i in range(4):
+    #     probs[i][i] += .5 * common_density
+    #     probs[i][i ^ 1] += .5 * common_density
+
+    # set desired cell to specified density
+    probs[0][2] = intra_density
+    probs[2][0] = intra_density
+    probs[1][3] = intra_density
+    probs[3][1] = intra_density
+
+    probs = probs / np.sum(probs)
+
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def symmetric_cross_cross(intra_density, common_density, overall_density_factor, seed, cluster_size=250):
+    sizes = [cluster_size] * 4
+
+    # set uniform density
+    probs = common_density*np.ones([4, 4])
+    # add some homophily
+    # for i in range(4):
+    #     probs[i][i] += .5 * common_density
+    #     probs[i][i ^ 1] += .5 * common_density
+
+    # set desired cell to specified density
+    probs[0][3] = intra_density
+    probs[3][0] = intra_density
+    probs[1][2] = intra_density
+    probs[2][1] = intra_density
+
+    probs = probs / np.sum(probs)
+
+    probs *= overall_density_factor
+
+    return nx.stochastic_block_model(sizes, probs, seed=seed)
+
+
+def uniform_increase_intra(intra_density, common_density, overall_density_factor, seed, cluster_size=250):
+    sizes = [cluster_size] * 4
+
+    # set uniform density
+    probs = common_density*np.ones([4, 4])
+    # for i in range(4):
+    #     probs[i][i] = intra_density
+    probs[0][0] = intra_density
+    probs[3][3] = intra_density
     probs *= overall_density_factor
 
     return nx.stochastic_block_model(sizes, probs, seed=seed)
