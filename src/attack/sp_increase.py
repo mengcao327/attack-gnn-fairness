@@ -11,6 +11,44 @@ from deeprobust.graph import utils
 import torch
 from torch import optim
 from torch.nn import functional as F
+from tqdm import tqdm
+
+
+def fit_surrogate(adj, features, labels, idx_train, index_val, device):
+    # Setup Surrogate Model
+    surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() +1, nhid=64,
+                    dropout=0.6, with_relu=False, with_bias=True, weight_decay=5e-4, lr=0.001,device=device)
+    surrogate = surrogate.to(device)
+    surrogate.fit(features, adj, labels, idx_train,index_val, train_iters=500,verbose=True)
+    return surrogate
+
+
+def compute_statistical_parity(sens, y):
+    y1 = y > .5
+    s1 = sens == 1
+    s0 = sens == 0
+    y0 = y <= .5
+
+    y1s0 = y1 & s0
+    y1s1 = y1 & s1
+
+    # all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+    # print('result distribution:')
+    # print(f'{sum(y0s0) / all:.2f}|{sum(y0s1) / all:.2f}\n{sum(y1s0) / all:.2f}|{sum(y1s1) / all:.2f}')
+    # print(f'dSP = {abs(sum(y1s0) / sum(s0) - sum(y1s1) / sum(s1))}')
+    # print('-----------------------')
+
+    dSP = abs(sum(y1s0) / sum(s0) - sum(y1s1) / sum(s1))
+    return dSP
+
+
+def test_surrogate(adj, features, labels, sens, idx_train, device):
+    surrogate = fit_surrogate(adj, features, labels, idx_train, device)
+    y = surrogate.predict(features, adj)
+    y = y.max(1)[1]
+    print(f'dSP = {compute_statistical_parity(sens, y)}')
+    return torch.tensor(y > 0.5).type_as(labels)
 from attack.utils import *
 
 
@@ -402,6 +440,2120 @@ class SPI_heuristic(BaseAttack):
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
 
+
+
+class SPI_modify(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=1) and (y=1, s=1) and delete links within (y=0,s=1) and (y=0)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_rev(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_rev, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=0) and (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_rev_rev(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_rev_rev, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=0) and (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1s0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_y1s1(BaseAttack):  #pokec
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_y1s1, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if n1[0]!=n2[0]:
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_y1s0(BaseAttack):  #for dblp
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_y1s0, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y1s0, 1)
+            n2 = np.random.choice(nodes_y1s0, 1)
+            if n1[0]!=n2[0]:
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_y1s(BaseAttack):  #pokec
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_y1s, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1= np.random.choice(nodes_y1s0, 1)
+            n2=np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_y0s(BaseAttack):  #pokec
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_y0s, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1= np.random.choice(nodes_y0s0, 1)
+            n2=np.random.choice(nodes_y0s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_0(BaseAttack):  #pokec
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_0, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1, s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1= np.random.choice(nodes_y0s0, 1)
+            n2=np.random.choice(nodes_y1s0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_degree(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_degree, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, deg_para,ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=1) and (y=1, s=1) only if degree(s1y1)<degree(s1y0)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                if deg_para*G.degree[n2[0]]<G.degree[n1[0]]:
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_degree_inv(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_degree_inv, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, deg_para, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=1) and (y=1, s=1) only if degree(s1y1)>degree(s1y0)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                if G.degree[n2[0]]>deg_para*G.degree[n1[0]]:
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_both_degree(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_both_degree, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, deg_para,ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by
+        1. linking nodes within (y=0,s=1) and (y=1, s=1) only if degree(s1y1)>degree(s1y0)
+        2. linking nodes within (y=0,s=0) and (y=1, s=0) only if degree(s0y0)<degree(s0y1)
+
+        The aim is to move more nodes with s=1 to have ^y=1 and s=0 to have y^=0
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations_s0:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                if deg_para*G.degree[n2[0]]<G.degree[n1[0]]:
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        i = 0
+        while i < n_perturbations_s1:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1s0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                if deg_para*G.degree[n1[0]] < G.degree[n2[0]]:
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_both_degree_inv(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_both_degree_inv, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                         attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by
+        1. linking nodes within (y=0,s=1) and (y=1, s=1) only if degree(s1y1)>degree(s1y0)
+        2. linking nodes within (y=0,s=0) and (y=1, s=0) only if degree(s0y0)>degree(s0y1)
+
+        The aim is to move more nodes with s=1 to have ^y=1 and s=0 to have y^=0
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # only add edges (delete may cause isolated nodes)
+
+        # target_delete_edge_set = []
+        # edges = np.array(G.edges())
+        # for i in tqdm(range(len(edges))):
+        #     if (edges[i][0] in nodes_y0s1 and edges[i][1] in nodes_y0) or (
+        #             edges[i][1] in nodes_y0s1 and edges[i][0] in nodes_y0):
+        #         target_delete_edge_set.append((edges[i][0], edges[i][1]))
+
+        # if len(target_delete_edge_set) <n_perturbations_s1:
+        #     n_add=n_perturbations_s1-len(target_delete_edge_set)
+        #     n_perturbations_s0+=n_add
+        #     G.remove_edges_from(target_delete_edge_set)
+        #     print("all edges in delete set are removed")
+        # else:
+
+        # add edge
+        i = 0
+        while i < n_perturbations_s0:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                if G.degree[n2[0]]>G.degree[n1[0]]:
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        i = 0
+        while i < n_perturbations_s1:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1s0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                if G.degree[n1[0]] > G.degree[n2[0]]:
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify_enhance(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_enhance, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                                 attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=1) and (y=1) BECAUSE EDGES ARE NOT TOO MUCH FOR DELETE SO ONLY ADD LINKS
+          # and delete links within (y=0,s=1) and (y=0)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations #// 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y0s1, 1)
+            n2 = np.random.choice(nodes_y1, 1)
+            # print(n1)
+            # print(n2)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y0s1, 1)
+        #     n2 = np.random.choice(nodes_y0s0, 1)
+        #     n3=np.random.choice(nodes_y0s1, 1)
+        #     print(n1)
+        #     print(n2)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         print("remove")
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        #     if n1[0]!=n3[0] and G.has_edge(n1[0],n3[0]):
+        #         print("remove")
+        #         G.remove_edge(n1[0],n3[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+
+class SPI_modify_inv(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_inv, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                             attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1,
+        s=1) and (y=0) and delete links within (y=1,s=1) and (y=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y1s1, 1)
+        #     n2 = np.random.choice(nodes_y1, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+
+class SPI_modify_inv2(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify_inv2, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                              attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1,
+        s=1) and (y=0,s=1) and delete links within (y=1,s=1) and (y=1)
+
+        The aim is to move more nodes with s=1 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        # n_perturbations_s0 = n_perturbations // 2
+        # n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations:
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y0s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete edge
+        # i = 0
+        # while i < n_perturbations_s1:
+        #     n1 = np.random.choice(nodes_y1s1, 1)
+        #     n2 = np.random.choice(nodes_y1, 1)
+        #     if n1[0]!=n2[0] and G.has_edge(n1[0],n2[0]):
+        #         G.remove_edge(n1[0],n2[0])
+        #         i += 1
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+
+class SPI_modify1(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify1, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                          attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=0) and (y=1)
+
+        The aim is to move more nodes with s=0 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge first to relieve the problem of isolated nodes when deleting
+        i = 0
+        while i < n_perturbations_s1:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+        # delete
+        target_delete_edge_set = []
+        edges = np.array(G.edges())
+        for i in tqdm(range(len(edges))):
+            if (edges[i][0] in nodes_y0s0 and edges[i][1] in nodes_y0) or (
+                    edges[i][1] in nodes_y0s0 and edges[i][0] in nodes_y0):
+                target_delete_edge_set.append((edges[i][0], edges[i][1]))
+        #
+        delete_order = np.random.permutation(len(target_delete_edge_set))
+
+        j = 0
+        for k in range(len(target_delete_edge_set)):
+            e = target_delete_edge_set[delete_order[k]]
+            G.remove_edge(*e)
+            j += 1
+            if not nx.is_connected(G):
+                G.add_edge(*e)
+                j -= 1
+            if j == n_perturbations_s0:
+                print("delete finished!")
+                break
+        print(f"{j} edges deleted")
+        n_perturbations_left = n_perturbations_s0 - j  # num left to add edges
+        if n_perturbations_left > 0:
+            i = 0
+            while i < n_perturbations_left:
+                n1 = np.random.choice(nodes_y0s0, 1)
+                n2 = np.random.choice(nodes_y1, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+        print(f"{n_perturbations_left+n_perturbations_s1} edges added")
+
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify11(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify11, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                          attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=0,
+        s=0) and (y=1,s=0)
+
+        The aim is to move more nodes with s=0 to have ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge first to relieve the problem of isolated nodes when deleting
+        i = 0
+        while i < n_perturbations_s1:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1s0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+        # delete
+        target_delete_edge_set = []
+        edges = np.array(G.edges())
+        for i in tqdm(range(len(edges))):
+            if (edges[i][0] in nodes_y0s0 and edges[i][1] in nodes_y0s0) or (
+                    edges[i][1] in nodes_y0s0 and edges[i][0] in nodes_y0s0):
+                target_delete_edge_set.append((edges[i][0], edges[i][1]))
+        #
+        delete_order = np.random.permutation(len(target_delete_edge_set))
+
+        j = 0
+        for k in tqdm(range(len(target_delete_edge_set))):
+            e = target_delete_edge_set[delete_order[k]]
+            G.remove_edge(*e)
+            j += 1
+            if not nx.is_connected(G):
+                G.add_edge(*e)
+                j -= 1
+            if j == n_perturbations_s0:
+                print("delete finished!")
+                break
+        print(f"{j} edges deleted")
+        n_perturbations_left = n_perturbations_s0 - j  # num left to add edges
+        if n_perturbations_left > 0:
+            i = 0
+            while i < n_perturbations_left:
+                n1 = np.random.choice(nodes_y0s0, 1)
+                n2 = np.random.choice(nodes_y1s0, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+        print(f"{n_perturbations_left+n_perturbations_s1} edges added")
+
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify2(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify2, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                          attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1,
+        s=1) and (y=0) and delete links within (y=1,s=1) and (y=1)
+
+        The aim is to move more nodes with s=1 to have ^y=0
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        # #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations_s1:
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+        # delete
+        target_delete_edge_set = []
+        edges = np.array(G.edges())
+        for i in tqdm(range(len(edges))):
+            if (edges[i][0] in nodes_y1s1 and edges[i][1] in nodes_y1) or (
+                    edges[i][1] in nodes_y1s1 and edges[i][0] in nodes_y1):
+                target_delete_edge_set.append((edges[i][0], edges[i][1]))
+        #
+        delete_order = np.random.permutation(len(target_delete_edge_set))
+
+        j = 0
+        for k in range(len(target_delete_edge_set)):
+            e = target_delete_edge_set[delete_order[k]]
+            G.remove_edge(*e)
+            j += 1
+            if not nx.is_connected(G):
+                G.add_edge(*e)
+                j -= 1
+            if j == n_perturbations_s0:
+                print("delete finished!")
+                break
+        print(f"{j} edges deleted")
+        n_perturbations_left = n_perturbations_s0 - j  # num left to add edges
+        if n_perturbations_left > 0:
+            i = 0
+            while i < n_perturbations_left:
+                n1 = np.random.choice(nodes_y1s1, 1)
+                n2 = np.random.choice(nodes_y0, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+        print(f"{n_perturbations_left+n_perturbations_s1} edges added")
+
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify22(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify22, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                          attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking nodes within (y=1,
+        s=1) and (y=0,s=1) and delete links within (y=1,s=1) and (y=1,s=1)
+
+        The aim is to move more nodes with s=1 to have ^y=0
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        # #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations_s1:
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y0s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+        # delete
+        target_delete_edge_set = []
+        edges = np.array(G.edges())
+        for i in tqdm(range(len(edges))):
+            if (edges[i][0] in nodes_y1s1 and edges[i][1] in nodes_y1s1) or (
+                    edges[i][1] in nodes_y1s1 and edges[i][0] in nodes_y1s1):
+                target_delete_edge_set.append((edges[i][0], edges[i][1]))
+        #
+        delete_order = np.random.permutation(len(target_delete_edge_set))
+
+        j = 0
+        for k in tqdm(range(len(target_delete_edge_set))):
+            e = target_delete_edge_set[delete_order[k]]
+            G.remove_edge(*e)
+            j += 1
+            if not nx.is_connected(G):
+                G.add_edge(*e)
+                j -= 1
+            if j == n_perturbations_s0:
+                print("delete finished!")
+                break
+        print(f"{j} edges deleted")
+        n_perturbations_left = n_perturbations_s0 - j  # num left to add edges
+        if n_perturbations_left > 0:
+            i = 0
+            while i < n_perturbations_left:
+                n1 = np.random.choice(nodes_y1s1, 1)
+                n2 = np.random.choice(nodes_y0s1, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+        print(f"{n_perturbations_left+n_perturbations_s1} edges added")
+
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify3(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify3, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                          attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by combining spim1 and spim2
+
+        The aim is to move more nodes with s=0 to have ^y=1 and s=1 to have ^y=0
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations_s0:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete
+        target_delete_edge_set = []
+        edges = np.array(G.edges())
+        for i in tqdm(range(len(edges))):
+            if (edges[i][0] in nodes_y0s0 and edges[i][1] in nodes_y0) or (
+                    edges[i][1] in nodes_y0s0 and edges[i][0] in nodes_y0) or (
+                    edges[i][0] in nodes_y1s1 and edges[i][1] in nodes_y1) or (
+                    edges[i][1] in nodes_y1s1 and edges[i][0] in nodes_y1):
+                target_delete_edge_set.append((edges[i][0], edges[i][1]))
+        #
+        delete_order = np.random.permutation(len(target_delete_edge_set))
+
+        j = 0
+        for k in tqdm(range(len(target_delete_edge_set))):
+            e = target_delete_edge_set[delete_order[k]]
+            G.remove_edge(*e)
+            j += 1
+            if not nx.is_connected(G):
+                G.add_edge(*e)
+                j -= 1
+            if j == n_perturbations_s0:
+                print("delete finished!")
+                break
+        print(f"{j} edges deleted")
+        n_perturbations_left = n_perturbations_s0 - j  # num left to add edges
+        if n_perturbations_left > 0:
+            i = 0
+            while i < n_perturbations_left:
+                n1 = np.random.choice(nodes_y0s0, 1)
+                n2 = np.random.choice(nodes_y1, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+                n1 = np.random.choice(nodes_y1s1, 1)
+                n2 = np.random.choice(nodes_y0, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+        print(f"{n_perturbations_left+n_perturbations_s1} edges added")
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+
+class SPI_modify33(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_modify33, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                          attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_modify does NOT support attacking features'
+
+    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by combining spim1 and spim2
+
+        The aim is to move more nodes with s=0 to have ^y=1 and s=1 to have ^y=0
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+        n = len(y)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+        nodes_y0 = [u for u in G.nodes() if y0[u]]
+        nodes_y1 = [u for u in G.nodes() if y1[u]]
+
+        # n_remove = n_perturbations//2
+        # n_remaining = n_perturbations-n_remove
+        #
+        # edges_to_remove = [[e[0], e[1]] for e in G.edges() if (y1[e[0]] and y1[e[1]] and s[e[0]] != s[e[1]]) or (y0 and ())]
+
+        # equally attack both sets
+        n_perturbations_s0 = n_perturbations // 2
+        n_perturbations_s1 = n_perturbations - n_perturbations_s0
+
+        # add edge
+        i = 0
+        while i < n_perturbations_s0:
+            n1 = np.random.choice(nodes_y0s0, 1)
+            n2 = np.random.choice(nodes_y1s0, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+            n1 = np.random.choice(nodes_y1s1, 1)
+            n2 = np.random.choice(nodes_y0s1, 1)
+            if not G.has_edge(n1[0], n2[0]):
+                G.add_edge(n1[0], n2[0])
+                i += 1
+
+        # delete
+        target_delete_edge_set = []
+        edges = np.array(G.edges())
+        for i in tqdm(range(len(edges))):
+            if (edges[i][0] in nodes_y0s0 and edges[i][1] in nodes_y0s0) or (
+                    edges[i][0] in nodes_y1s1 and edges[i][1] in nodes_y1s1):
+                target_delete_edge_set.append((edges[i][0], edges[i][1]))
+        #
+        delete_order = np.random.permutation(len(target_delete_edge_set))
+
+        j = 0
+        for k in tqdm(range(len(target_delete_edge_set))):
+            e = target_delete_edge_set[delete_order[k]]
+            G.remove_edge(*e)
+            j += 1
+            if not nx.is_connected(G):
+                G.add_edge(*e)
+                j -= 1
+            if j == n_perturbations_s0:
+                print("delete finished!")
+                break
+        print(f"{j} edges deleted")
+        n_perturbations_left = n_perturbations_s0 - j  # num left to add edges
+        if n_perturbations_left > 0:
+            i = 0
+            while i < n_perturbations_left:
+                n1 = np.random.choice(nodes_y0s0, 1)
+                n2 = np.random.choice(nodes_y1s0, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+                n1 = np.random.choice(nodes_y1s1, 1)
+                n2 = np.random.choice(nodes_y0s1, 1)
+                if not G.has_edge(n1[0], n2[0]):
+                    G.add_edge(n1[0], n2[0])
+                    i += 1
+        print(f"{n_perturbations_left+n_perturbations_s1} edges added")
+        modified_adj = nx.adjacency_matrix(G)
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
 
 class MetaSPI(Metattack):
     """
