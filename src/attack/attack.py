@@ -1,6 +1,11 @@
 from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
+from attack.sp_increase import fit_surrogate, SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, \
+    RandomMetropolisHastingSPI
+from attack.sp_increase import SPI_heuristic, MetaSPI, SPI_modify,SPI_modify_0,SPI_modify_y0s,SPI_modify_y1s0,SPI_modify_y1s,SPI_modify_rev,SPI_modify_rev_rev,SPI_modify_degree,SPI_modify_degree_inv,\
+    SPI_modify_both_degree, SPI_modify_both_degree_inv,SPI_modify1, SPI_modify2, SPI_modify3,SPI_modify_enhance, SPI_modify_inv, SPI_modify_inv2, SPI_modify11, SPI_modify22, SPI_modify33
+from attack.metattackSA import MetattackSA
 from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
 from attack.targeted_spi import RandomSPI, NettackSPI, TargetRewireSPI
 from structack.structack import build_custom
@@ -12,6 +17,7 @@ import scipy.sparse as sp
 import numpy as np
 import torch
 import os
+
 
 def build_random(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return Random()
@@ -28,23 +34,101 @@ def build_sacide(adj=None, features=None, labels=None, idx_train=None, idx_test=
 def build_SPI_heuristic(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return SPI_heuristic(device=device)
 
+
 def build_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return RewireSPI(device=device)
+
 
 def build_iter2(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return RewireMetropolisHastingSPI(device=device)
 
+
 def build_iter3(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return RandomMetropolisHastingSPI()
+
+
+def build_SPI_modify(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify()
+
+def build_SPI_modify_rev(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_rev()
+
+def build_SPI_modify_rev_rev(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_rev_rev()
+
+def build_SPI_modify_y1s0(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_y1s0()
+
+def build_SPI_modify_y1s(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_y1s()
+
+def build_SPI_modify_y0s(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_y0s()
+
+def build_SPI_modify_0(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_0()
+
+def build_SPI_modify_degree(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_degree()
+
+def build_SPI_modify_degree_inv(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_degree_inv()
+
+def build_SPI_modify_both_degree(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_both_degree()
+
+def build_SPI_modify_both_degree_inv(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_both_degree_inv()
+
+def build_SPI_modify1(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify1()
+
+
+def build_SPI_modify2(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify2()
+
+
+def build_SPI_modify3(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify3()
+
+
+def build_SPI_modify11(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify11()
+
+
+def build_SPI_modify22(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify22()
+
+
+def build_SPI_modify33(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify33()
+
+
+def build_SPI_modify_enhance(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_enhance()
+
+
+def build_SPI_modify_inv(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_inv()
+
+
+def build_SPI_modify_inv2(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return SPI_modify_inv2()
     return RandomMetropolisHastingSPI(device=device)
+
 
 def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return RandomSPI(device=device)
 
+
 def build_target_nettackspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return NettackSPI(device=device)
 
+<<<<<<< HEAD
 def build_target_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return TargetRewireSPI(device=device)
+=======
+>>>>>>> 1e468f28eef7be120d1b1b7e1a64289bec92e64a
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -76,6 +160,125 @@ def attack_rewirespi(model, adj, features, labels, n_perturbations, idx_train, i
     return postprocess_adj(modified_adj)
 
 
+def attack_SPI_modify(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_rev(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_rev_rev(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_y1s0(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_y1s(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_0(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_y0s(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_degree(args,model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    deg_para=args.deg
+    model.attack(deg_para,adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_degree_inv(args,model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    deg_para = args.deg
+    model.attack(deg_para,adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_both_degree(args,model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    deg_para = args.deg
+    model.attack(deg_para,adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify_both_degree_inv(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+def attack_SPI_modify1(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
+    #                 dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
+    # surrogate = surrogate.to(device)
+    # surrogate.fit(features, adj, labels, idx_train)
+    # surrogate=fit_surrogate(adj, features, labels, idx_train,idx_unlabeled,device)
+
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify2(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify3(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify11(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify22(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify33(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify_enhance(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify_inv(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
+def attack_SPI_modify_inv2(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(adj, labels, sens, n_perturbations)
+    modified_adj = model.modified_adj
+    return postprocess_adj(modified_adj)
+
+
 def postprocess_adj(adj):
     adj = normalize_adj(adj)
     #     adj = sparse_mx_to_torch_sparse_tensor(adj)
@@ -88,7 +291,7 @@ def attack_structack(model, adj, features, labels, n_perturbations, idx_train, i
     return postprocess_adj(modified_adj)
 
 
-def apply_perturbation(model_builder, attack, adj, features, labels, sens,
+def apply_perturbation(model_builder, attack, args,adj, features, labels, sens,
                        idx_train, idx_val, idx_test, ptb_rate=0.05,
                        cuda=False, seed=42):
     np.random.seed(seed)
@@ -103,6 +306,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
 
     n_perturbations = int(ptb_rate * (adj.sum() // 2))
     print(f'n_perturbations = {n_perturbations}')
+    sens = sens.long()
 
     if model_builder == build_metattack or model_builder == build_metaspi or model_builder == build_prbcd:
         adj, features, labels = preprocess(adj, sp.coo_matrix(features.cpu().numpy()), labels.cpu().numpy(),
@@ -113,12 +317,23 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
     if model_builder == build_MetaDiscriminator:
         # build the model
         model = model_builder(adj, features, sens, idx_train, idx_test, device)
+    elif model_builder == build_MetaSA:
+        model = model_builder(adj, features, labels, sens, idx_train, idx_test, device)
     else:
         # build the model
         model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
+<<<<<<< HEAD
     modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
+=======
+    if model_builder==build_SPI_modify_degree or model_builder==build_SPI_modify_degree_inv or model_builder==build_SPI_modify_both_degree:
+        modified_adj = attack(args,model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled,
+                              sens.to(device))
+    else:
+        modified_adj = attack(model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled, sens.to(device))
+
+>>>>>>> 1e468f28eef7be120d1b1b7e1a64289bec92e64a
     return modified_adj
 
 
@@ -151,7 +366,7 @@ def build_metaspi(adj=None, features=None, labels=None, idx_train=None, idx_test
     print(f'{torch.cuda.device_count()} GPUs available')
     print('built surrogate')
     model = MetaSPI(model=surrogate, nnodes=adj.shape[0], feature_shape=features.shape,
-                      attack_structure=True, attack_features=False, device=device, lambda_=lambda_, lr=0.01)
+                    attack_structure=True, attack_features=False, device=device, lambda_=lambda_, lr=0.01)
     print('built model')
     model = model.to(device)
     print('to device')
@@ -176,6 +391,24 @@ def build_MetaDiscriminator(adj=None, features=None, sens=None, idx_train=None, 
     return model
 
 
+def build_MetaSA(adj=None, features=None, labels=None, sens=None, idx_train=None, idx_test=None, device=None):
+    lambda_ = 0.5
+
+    # Setup Surrogate Model
+    surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
+                    dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
+    surrogate = surrogate.to(device)
+    surrogate.fit(features, adj, labels, idx_train)
+    print(f'{torch.cuda.device_count()} GPUs available')
+    print('built surrogate')
+    model = MetattackSA(model=surrogate, nnodes=adj.shape[0], feature_shape=features.shape,
+                        attack_structure=True, attack_features=False, device=device, lambda_=lambda_, lr=0.005)
+    print('built model')
+    model = model.to(device)
+    print('to device')
+    return model
+
+
 def attack_metattack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(features, adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
     return to_scipy(model.modified_adj)
@@ -185,21 +418,29 @@ def attack_metaspi(model, adj, features, labels, n_perturbations, idx_train, idx
     model.attack(features, adj, labels, sens, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
     return to_scipy(model.modified_adj)
 
+
 def attack_MetaDiscriminator(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(features, adj, sens, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
     return to_scipy(model.modified_adj)
+
+
+def attack_MetaSA(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
+    model.attack(features, adj, labels, sens, idx_train, idx_unlabeled, n_perturbations, ll_constraint=False)
+    return to_scipy(model.modified_adj)
+
 
 # from rgnn_at_scale.attacks import create_attack
 # from rgnn_at_scale.models.gcn import GCN as prGCN
 
 
 def build_prbcd(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    model = prGCN(n_features=features.shape[1], n_classes=labels.max().item() + 1)
-    attack_params = {}  # TODO: can set attack params
-    attack_model = create_attack("PRBCD", attr=features, adj=adj, labels=labels, model=model, idx_attack=idx_test.detach().cpu().numpy(),
-                                 device=device, data_device=device, binary_attr=True,
-                                 make_undirected=True, **attack_params)
-    return attack_model
+    # model = prGCN(n_features=features.shape[1], n_classes=labels.max().item() + 1)
+    # attack_params = {}  # TODO: can set attack params
+    # attack_model = create_attack("PRBCD", attr=features, adj=adj, labels=labels, model=model, idx_attack=idx_test.detach().cpu().numpy(),
+    #                              device=device, data_device=device, binary_attr=True,
+    #                              make_undirected=True, **attack_params)
+    # return attack_model
+    pass
 
 
 def attack_prbcd(adversary, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
@@ -208,7 +449,8 @@ def attack_prbcd(adversary, adj, features, labels, n_perturbations, idx_train, i
     return pert_adj.to_scipy()
 
 
-def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name, sens_attr=None):
+def attack(args,attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test, seed, dataset_name,
+           sens_attr=None):
     """
     builds the attack, applies the perturbation
     :param attack_name: random, dice, metattack
@@ -228,8 +470,10 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
     if not os.path.exists(f'../dataset/cached_attacks/'):
         os.mkdir(f'../dataset/cached_attacks/')
 
-    if sens_attr=='gender' and 'region_job' in dataset_name and attack_name=='sacide':
+    if sens_attr == 'gender' and 'region_job' in dataset_name and attack_name == 'sacide':
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{sens_attr}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
+    elif attack_name == 'spimd' or attack_name == 'spimdi' or attack_name == 'spimbd':
+        cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{args.deg}_{ptb_rate:.2f}_{seed}.npz'
     else:
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
     # check if modified_adj of (dataset_name, attack_name, ptb_rate, seed) are stored
@@ -240,21 +484,44 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'y1s1-DD':build_SPI_heuristic, 'metaspi':build_metaspi,
-              'MetaDiscriminator':build_MetaDiscriminator, 'rspis-rev2':build_rewirespi,
-              'iter3':build_iter3,'iter2':build_iter2, 'target_randomspi':build_target_randomspi,
-              'target_nettackspi':build_target_nettackspi,'target_rewirespi':build_target_rewirespi}
+              'prbcd': build_prbcd, 'y1s1-DD': build_SPI_heuristic, 'metaspi': build_metaspi,
+              'MetaDiscriminator': build_MetaDiscriminator, 'rspis': build_rewirespi,
+              'iter3': build_iter3, 'iter2': build_iter2,
+              'prbcd': build_prbcd, 'y1s1-DD': build_SPI_heuristic, 'spim': build_SPI_modify,'spimr': build_SPI_modify_rev,
+              'spimrr': build_SPI_modify_rev_rev,'spimy0s': build_SPI_modify_y0s,'spim0': build_SPI_modify_0,
+              'spimy1s0': build_SPI_modify_y1s0,'spimy1s': build_SPI_modify_y1s,
+              'spimd': build_SPI_modify_degree,'spimdi': build_SPI_modify_degree_inv,
+              'spimbd': build_SPI_modify_both_degree,'spimbdi': build_SPI_modify_both_degree_inv,
+              'spim1': build_SPI_modify1, 'spim2': build_SPI_modify2, 'spim3': build_SPI_modify3,
+              'spim11': build_SPI_modify11, 'spim22': build_SPI_modify22, 'spim33': build_SPI_modify33,
+              'spime': build_SPI_modify_enhance,
+              'spimi': build_SPI_modify_inv, 'spimi2': build_SPI_modify_inv2, 'metaspi': build_metaspi,
+              'MetaDiscriminator': build_MetaDiscriminator, 'metasa': build_MetaSA,
+              'iter3': build_iter3, 'iter2': build_iter2, 'target_randomspi': build_target_randomspi,
+              'target_nettackspi': build_target_nettackspi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'y1s1-DD':attack_rewirespi, 'metaspi': attack_metaspi,
-               'MetaDiscriminator':attack_MetaDiscriminator, 'rspis-rev2':attack_rewirespi,
-               'iter3':attack_rewirespi,'iter2':attack_rewirespi, 'target_randomspi':attack_rewirespi,
-               'target_nettackspi':attack_rewirespi, 'target_rewirespi':attack_rewirespi}
+               'prbcd': attack_prbcd, 'y1s1-DD': attack_SPI_heuristic, 'metaspi': attack_metaspi,
+               'MetaDiscriminator': attack_MetaDiscriminator, 'rspis': attack_rewirespi,
+               'iter3': attack_rewirespi, 'iter2': attack_rewirespi,
+               'prbcd': attack_prbcd, 'y1s1-DD': attack_SPI_heuristic, 'spim': attack_SPI_modify,'spimr': attack_SPI_modify_rev,
+               'spimrr': attack_SPI_modify_rev_rev,'spimy0s': attack_SPI_modify_y0s,'spim0': attack_SPI_modify_0,
+               'spimy1s0': attack_SPI_modify_y1s0,'spimy1s': attack_SPI_modify_y1s,
+               'spimd':attack_SPI_modify_degree,'spimdi':attack_SPI_modify_degree_inv,
+               'spimbd':attack_SPI_modify_both_degree,'spimbdi':attack_SPI_modify_both_degree_inv,
+               'spim1': attack_SPI_modify1, 'spim2': attack_SPI_modify2, 'spim3': attack_SPI_modify3,
+               'spim11': attack_SPI_modify11, 'spim22': attack_SPI_modify22, 'spim33': attack_SPI_modify33,
+               'spime': attack_SPI_modify_enhance,
+               'spimi': attack_SPI_modify_inv, 'spimi2': attack_SPI_modify_inv2, 'metaspi': attack_metaspi,
+               'MetaDiscriminator': attack_MetaDiscriminator, 'metasa': attack_MetaSA,
+               'iter3': attack_rewirespi, 'iter2': attack_rewirespi, 'target_randomspi': attack_rewirespi,
+               'target_nettackspi': attack_rewirespi}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:
-        modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], adj, features, labels, sens,
+        modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], args,adj, features, labels, sens,
                                           idx_train,
-                                          idx_val, idx_test, ptb_rate=ptb_rate, seed=seed, cuda=torch.cuda.is_available())
+                                          idx_val, idx_test, ptb_rate=ptb_rate, seed=seed,
+                                          cuda=torch.cuda.is_available())
         print(f'Attack finished, returning perturbed graph')
         print(f'Storing perturbed adjacency matrix at {cached_filename}.')
         sp.save_npz(cached_filename, modified_adj)
