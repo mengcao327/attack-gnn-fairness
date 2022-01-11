@@ -69,8 +69,8 @@ class BaseMetropolisHastingSPI(BaseAttack):
             print('Obtaining predictions')
             y = self.surrogate.predict(features, modified_adj)
             y = y.max(1)[1]
-            dSP = compute_statistical_parity(s, y)
-            y = torch.tensor(y > 0.5).type_as(labels)
+            dSP = compute_statistical_parity(s.to(self.device), y.to(self.device))
+            y = torch.tensor(y).type_as(labels)
             print(f'Curr dSP = {dSP:.4f}')
 
             # propose B perturbations
@@ -79,7 +79,7 @@ class BaseMetropolisHastingSPI(BaseAttack):
 
             # compute the statistical parity
             print('Computing statistical parity')
-            proposed_sp = compute_statistical_parity(s, self.surrogate.predict(features, proposed_adj).max(1)[1])
+            proposed_sp = compute_statistical_parity(s.to(self.device), self.surrogate.predict(features, proposed_adj).max(1)[1].to(self.device))
             print(f'Proposed dSP = {proposed_sp:.4f}')
 
             min_accept = dSP * (1 - IMPROVEMENT_MARGIN)
@@ -108,6 +108,8 @@ class BaseMetropolisHastingSPI(BaseAttack):
 class RandomMetropolisHastingSPI(BaseMetropolisHastingSPI):
 
     def propose_perturbation(self, adj, features, y, s, idx_train, B):
+        s = s.to(self.device)
+        y = y.to(self.device)
         modified_adj = adj.copy()
 
         n_remove = B // 2
@@ -126,6 +128,9 @@ class RandomMetropolisHastingSPI(BaseMetropolisHastingSPI):
 class RewireMetropolisHastingSPI(BaseMetropolisHastingSPI):
 
     def propose_perturbation(self, adj, features, y, s, idx_train, B):
+        s = s.to(self.device)
+        y = y.to(self.device)
+
         modified_adj = adj.copy()
 
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
@@ -233,18 +238,18 @@ class RewireSPI(BaseAttack):
         def avg_deg(nodes):
             return np.mean(np.array([G.degree(u) for u in nodes]))
 
-        print('Average degree')
-        print(f'{avg_deg(nodes_y0s0):.2f}|{avg_deg(nodes_y0s1):.2f}\n{avg_deg(nodes_y1s0):.2f}|'
-              f'{avg_deg(nodes_y1s1):.2f}')
+        # print('Average degree')
+        # print(f'{avg_deg(nodes_y0s0):.2f}|{avg_deg(nodes_y0s1):.2f}\n{avg_deg(nodes_y1s0):.2f}|'
+        #       f'{avg_deg(nodes_y1s1):.2f}')
 
         def avg_hom(nodes):
             return np.mean(np.array(
                 [len([v for v in G.neighbors(u) if y[v] == y[u]]) / len([v for v in G.neighbors(u) if y[v] != -1]) for u
                  in nodes]))
 
-        print('Average homophily')
-        print(f'{avg_hom(nodes_y0s0):.2f}|{avg_hom(nodes_y0s1):.2f}\n{avg_hom(nodes_y1s0):.2f}|'
-              f'{avg_hom(nodes_y1s1):.2f}')
+        # print('Average homophily')
+        # print(f'{avg_hom(nodes_y0s0):.2f}|{avg_hom(nodes_y0s1):.2f}\n{avg_hom(nodes_y1s0):.2f}|'
+        #       f'{avg_hom(nodes_y1s1):.2f}')
 
         n_remove = n_perturbations // 2
         n_remaining = n_perturbations - n_remove
@@ -252,22 +257,22 @@ class RewireSPI(BaseAttack):
         removable_edges = [[e[0], e[1]] for e in G.edges() if y[e[0]] == y[e[1]]]
         G_rem = nx.from_edgelist(removable_edges)
 
-        nodes_y1s0_cand = [u for u in nodes_y1s0 if
+        nodes_y1s1_cand = [u for u in nodes_y1s1 if
                            G_rem.degree(u) != 0]  # nodes from nodes_y1s0 that do have edges in G_rem
-        nodes_y0s1_cand = [u for u in nodes_y0s1 if
+        nodes_y0s0_cand = [u for u in nodes_y0s0 if
                            G_rem.degree(u) != 0]  # nodes from nodes_y0s1 that do have edges in G_rem
 
         # equally attack both sets
         n_perturbations_s0 = n_remaining // 2
         n_perturbations_s1 = n_remaining - n_perturbations_s0
 
-        subject_s0 = list(np.random.choice(nodes_y1s0_cand, n_perturbations_s0))
-        subject_s1 = list(np.random.choice(nodes_y0s1_cand, n_perturbations_s1))
+        subject_s0 = list(np.random.choice(nodes_y1s1_cand, n_perturbations_s0))
+        subject_s1 = list(np.random.choice(nodes_y0s0_cand, n_perturbations_s1))
 
         subject = subject_s0 + subject_s1
 
-        influencer_s0 = list(np.random.choice(nodes_y0s0, n_perturbations_s0))
-        influencer_s1 = list(np.random.choice(nodes_y1s1, n_perturbations_s1))
+        influencer_s0 = list(np.random.choice(nodes_y0s1, n_perturbations_s0))
+        influencer_s1 = list(np.random.choice(nodes_y1s0, n_perturbations_s1))
         influencer = influencer_s0 + influencer_s1
 
         print(len(influencer_s0))
@@ -293,17 +298,17 @@ class RewireSPI(BaseAttack):
         modified_adj[subject, unwanted] = 0
         modified_adj[unwanted, subject] = 0
 
-        G = nx.from_scipy_sparse_matrix(modified_adj)
-        print('Average homophily')
-        print(f'{avg_hom(nodes_y0s0):.2f}|{avg_hom(nodes_y0s1):.2f}\n{avg_hom(nodes_y1s0):.2f}|'
-              f'{avg_hom(nodes_y1s1):.2f}')
+        # G = nx.from_scipy_sparse_matrix(modified_adj)
+        # print('Average homophily')
+        # print(f'{avg_hom(nodes_y0s0):.2f}|{avg_hom(nodes_y0s1):.2f}\n{avg_hom(nodes_y1s0):.2f}|'
+        #       f'{avg_hom(nodes_y1s1):.2f}')
 
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
         test_surrogate(modified_adj, features, y, s, idx_train, device=self.device)
 
 
-class SPI_heuristic(BaseAttack):
+class SPI_heuristic_old(BaseAttack):
 
     def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
         super(SPI_heuristic, self).__init__(model, nnodes, attack_structure=attack_structure,
@@ -311,7 +316,7 @@ class SPI_heuristic(BaseAttack):
 
         assert not self.attack_features, 'SPI_heuristic does NOT support attacking features'
 
-    def attack(self, ori_adj, y, s, n_perturbations, **kwargs):
+    def attack(self, ori_adj, features, y, s, idx_train, n_perturbations, **kwargs):
         """
         Attempts to increase the statistical parity by linking single [subject] low-degree nodes with (y=0,
         s=0) to multiple [influencer] low-degree nodes with (y=1,s=0) and vice versa for (y=0,s=1) and (y=1,s=1)
@@ -326,7 +331,8 @@ class SPI_heuristic(BaseAttack):
         :return:
         """
         modified_adj = ori_adj.tolil()
-        n = len(y)
+
+        y = test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
 
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
@@ -361,9 +367,9 @@ class SPI_heuristic(BaseAttack):
         n_perturbations_s0 = n_perturbations // 2
         n_perturbations_s1 = n_perturbations - n_perturbations_s0
 
-        subject_s0 = list(np.random.choice(nodes_y1s0, n_perturbations_s0 // 2))
+        subject_s0 = list(np.random.choice(nodes_y1s1, n_perturbations_s0 // 2))
         subject_s0 += subject_s0
-        subject_s1 = list(np.random.choice(nodes_y0s1, n_perturbations_s1 // 2))
+        subject_s1 = list(np.random.choice(nodes_y0s0, n_perturbations_s1 // 2))
         subject_s1 += subject_s1
 
         subject = subject_s0 + subject_s1
@@ -402,6 +408,70 @@ class SPI_heuristic(BaseAttack):
         self.check_adj(modified_adj)
         self.modified_adj = modified_adj
 
+
+class SPI_heuristic(BaseAttack):
+
+    def __init__(self, model=None, nnodes=None, attack_structure=True, attack_features=False, device='cpu'):
+        super(SPI_heuristic, self).__init__(model, nnodes, attack_structure=attack_structure,
+                                            attack_features=attack_features, device=device)
+
+        assert not self.attack_features, 'SPI_heuristic does NOT support attacking features'
+
+    def attack(self, ori_adj, features, y, s, idx_train, n_perturbations, **kwargs):
+        """
+        Attempts to increase the statistical parity by linking single [subject] low-degree nodes with (y=0,
+        s=0) to multiple [influencer] low-degree nodes with (y=1,s=0) and vice versa for (y=0,s=1) and (y=1,s=1)
+
+        The aim is to move more nodes with s=0 to have ^y=0 and more nodes with s=1 to ^y=1
+
+        :param y:
+        :param ori_adj:
+        :param s:
+        :param n_perturbations:
+        :param kwargs:
+        :return:
+        """
+        modified_adj = ori_adj.tolil()
+
+        y = test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
+
+        # remember that we might have s[i]=-1 when the sensitive attribute is not available
+        y1 = y == 1
+        s1 = s == 1
+        s0 = s == 0
+        y0 = y == 0
+
+        y0s0 = y0 & s0
+        y1s0 = y1 & s0
+        y0s1 = y0 & s1
+        y1s1 = y1 & s1
+
+        all = sum(y0s0 + y1s0 + y0s1 + y1s1)
+
+        print('initial distribution:')
+        print(f'{sum(y1s1) / all:.2f}|{sum(y1s0) / all:.2f}\n{sum(y0s1) / all:.2f}|{sum(y0s0) / all:.2f}')
+        print('-----------------------')
+
+        G = nx.from_scipy_sparse_matrix(ori_adj)
+
+        nodes_y0s0 = [u for u in G.nodes() if y0s0[u]]
+        nodes_y1s0 = [u for u in G.nodes() if y1s0[u]]
+        nodes_y0s1 = [u for u in G.nodes() if y0s1[u]]
+        nodes_y1s1 = [u for u in G.nodes() if y1s1[u]]
+
+        subject = list(np.random.choice(nodes_y0s0, n_perturbations))
+        influencer = list(np.random.choice(nodes_y1s1, n_perturbations))
+
+        assert (len(subject) == len(influencer))
+
+        print(f'{modified_adj[subject, influencer].nnz} edges already exist')
+
+        modified_adj[subject, influencer] = 1
+        modified_adj[influencer, subject] = 1
+
+        self.check_adj(modified_adj)
+        self.modified_adj = modified_adj
+        
 
 class MetaSPI(Metattack):
     """

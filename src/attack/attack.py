@@ -2,7 +2,7 @@ from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
 from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
-from attack.targeted_spi import RandomSPI, NettackSPI
+from attack.targeted_spi import RandomSPI, NettackSPI, TargetRewireSPI
 from structack.structack import build_custom
 import structack.node_selection as ns
 import structack.node_connection as nc
@@ -26,7 +26,7 @@ def build_sacide(adj=None, features=None, labels=None, idx_train=None, idx_test=
 
 
 def build_SPI_heuristic(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return SPI_heuristic()
+    return SPI_heuristic(device=device)
 
 def build_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return RewireSPI(device=device)
@@ -42,6 +42,9 @@ def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None,
 
 def build_target_nettackspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return NettackSPI(device=device)
+
+def build_target_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
+    return TargetRewireSPI(device=device)
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -115,7 +118,7 @@ def apply_perturbation(model_builder, attack, adj, features, labels, sens,
         model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
-    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens.to(device))
+    modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
     return modified_adj
 
 
@@ -237,15 +240,15 @@ def attack(attack_name, ptb_rate, adj, features, labels, sens, idx_train, idx_va
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'spih':build_SPI_heuristic, 'metaspi':build_metaspi,
-              'MetaDiscriminator':build_MetaDiscriminator, 'rspis':build_rewirespi,
+              'prbcd': build_prbcd, 'y1s1-DD':build_SPI_heuristic, 'metaspi':build_metaspi,
+              'MetaDiscriminator':build_MetaDiscriminator, 'rspis-rev2':build_rewirespi,
               'iter3':build_iter3,'iter2':build_iter2, 'target_randomspi':build_target_randomspi,
-              'target_nettackspi':build_target_nettackspi}
+              'target_nettackspi':build_target_nettackspi,'target_rewirespi':build_target_rewirespi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'spih':attack_SPI_heuristic, 'metaspi': attack_metaspi,
-               'MetaDiscriminator':attack_MetaDiscriminator, 'rspis':attack_rewirespi,
+               'prbcd': attack_prbcd, 'y1s1-DD':attack_rewirespi, 'metaspi': attack_metaspi,
+               'MetaDiscriminator':attack_MetaDiscriminator, 'rspis-rev2':attack_rewirespi,
                'iter3':attack_rewirespi,'iter2':attack_rewirespi, 'target_randomspi':attack_rewirespi,
-               'target_nettackspi':attack_rewirespi}
+               'target_nettackspi':attack_rewirespi, 'target_rewirespi':attack_rewirespi}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:
