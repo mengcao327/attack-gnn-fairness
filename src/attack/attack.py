@@ -124,11 +124,8 @@ def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None,
 def build_target_nettackspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return NettackSPI(device=device)
 
-<<<<<<< HEAD
 def build_target_rewirespi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return TargetRewireSPI(device=device)
-=======
->>>>>>> 1e468f28eef7be120d1b1b7e1a64289bec92e64a
 
 def attack_random(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens):
     model.attack(adj, n_perturbations)
@@ -324,16 +321,12 @@ def apply_perturbation(model_builder, attack, args,adj, features, labels, sens,
         model = model_builder(adj, features, labels, idx_train, idx_test, device)
 
     # perform the attack
-<<<<<<< HEAD
     modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
-=======
     if model_builder==build_SPI_modify_degree or model_builder==build_SPI_modify_degree_inv or model_builder==build_SPI_modify_both_degree:
         modified_adj = attack(args,model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled,
                               sens.to(device))
     else:
         modified_adj = attack(model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled, sens.to(device))
-
->>>>>>> 1e468f28eef7be120d1b1b7e1a64289bec92e64a
     return modified_adj
 
 
