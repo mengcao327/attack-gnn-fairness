@@ -5,7 +5,7 @@ from attack.sp_increase import fit_surrogate, SPI_heuristic, MetaSPI, RewireSPI,
     RandomMetropolisHastingSPI
 from attack.sp_increase import SPI_heuristic, MetaSPI, SPI_modify,SPI_modify_0,SPI_modify_y0s,SPI_modify_y1s0,SPI_modify_y1s,SPI_modify_rev,SPI_modify_rev_rev,SPI_modify_degree,SPI_modify_degree_inv,\
     SPI_modify_both_degree, SPI_modify_both_degree_inv,SPI_modify1, SPI_modify2, SPI_modify3,SPI_modify_enhance, SPI_modify_inv, SPI_modify_inv2, SPI_modify11, SPI_modify22, SPI_modify33
-from attack.metattackSA import MetattackSA
+# from attack.metattackSA import MetattackSA
 from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
 from attack.targeted_spi import RandomSPI, NettackSPI, TargetRewireSPI
 from structack.structack import build_custom
@@ -468,6 +468,10 @@ def attack(args,attack_name, ptb_rate, adj, features, labels, sens, idx_train, i
     elif attack_name == 'spimd' or attack_name == 'spimdi' or attack_name == 'spimbd':
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{args.deg}_{ptb_rate:.2f}_{seed}.npz'
     else:
+        print(dataset_name)
+        print(attack_name)
+        print(ptb_rate)
+        print(seed)
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
     # check if modified_adj of (dataset_name, attack_name, ptb_rate, seed) are stored
     if os.path.exists(cached_filename):
@@ -477,10 +481,9 @@ def attack(args,attack_name, ptb_rate, adj, features, labels, sens, idx_train, i
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'y1s1-DD': build_SPI_heuristic, 'metaspi': build_metaspi,
+              'prbcd': build_prbcd, 'y1s1-DD-no-surrogate': build_SPI_heuristic, 'metaspi': build_metaspi,
               'MetaDiscriminator': build_MetaDiscriminator, 'rspis': build_rewirespi,
               'iter3': build_iter3, 'iter2': build_iter2,
-              'prbcd': build_prbcd, 'y1s1-DD': build_SPI_heuristic, 'spim': build_SPI_modify,'spimr': build_SPI_modify_rev,
               'spimrr': build_SPI_modify_rev_rev,'spimy0s': build_SPI_modify_y0s,'spim0': build_SPI_modify_0,
               'spimy1s0': build_SPI_modify_y1s0,'spimy1s': build_SPI_modify_y1s,
               'spimd': build_SPI_modify_degree,'spimdi': build_SPI_modify_degree_inv,
@@ -493,10 +496,10 @@ def attack(args,attack_name, ptb_rate, adj, features, labels, sens, idx_train, i
               'iter3': build_iter3, 'iter2': build_iter2, 'target_randomspi': build_target_randomspi,
               'target_nettackspi': build_target_nettackspi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'y1s1-DD': attack_SPI_heuristic, 'metaspi': attack_metaspi,
+               'prbcd': attack_prbcd, 'y1s1-DD-no-surrogate': attack_rewirespi, 'metaspi': attack_metaspi,
                'MetaDiscriminator': attack_MetaDiscriminator, 'rspis': attack_rewirespi,
                'iter3': attack_rewirespi, 'iter2': attack_rewirespi,
-               'prbcd': attack_prbcd, 'y1s1-DD': attack_SPI_heuristic, 'spim': attack_SPI_modify,'spimr': attack_SPI_modify_rev,
+               'prbcd': attack_prbcd, 'y1s1-DD-no-surrogate': attack_rewirespi, 'spim': attack_SPI_modify,'spimr': attack_SPI_modify_rev,
                'spimrr': attack_SPI_modify_rev_rev,'spimy0s': attack_SPI_modify_y0s,'spim0': attack_SPI_modify_0,
                'spimy1s0': attack_SPI_modify_y1s0,'spimy1s': attack_SPI_modify_y1s,
                'spimd':attack_SPI_modify_degree,'spimdi':attack_SPI_modify_degree_inv,

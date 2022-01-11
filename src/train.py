@@ -91,7 +91,7 @@ parser.add_argument('--sens_number', type=int, default=200,
 '''
             Optimization args
 '''
-parser.add_argument('--epochs', type=int, default=1000,
+parser.add_argument('--epochs', type=int, default=500,
                     help='Number of epochs to train.')
 parser.add_argument('--fastmode', action='store_true', default=False,
                     help='Validate during training pass.')
@@ -130,7 +130,7 @@ for model_name in args.model:
                 load_dataset(args, seed)
 
             if args.attack_type != 'none':
-                adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
+                adj = attack(args,args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
                              seed, dataset, sens_attr)
                 print("edge dist. after attack:")
                 check_dataset(dataset, adj, labels, sens, idx_train, idx_val, idx_test)

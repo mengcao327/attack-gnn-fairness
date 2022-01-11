@@ -364,7 +364,7 @@ class SPI_heuristic(BaseAttack):
         """
         modified_adj = ori_adj.tolil()
 
-        y = test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
+        # y = test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
 
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
