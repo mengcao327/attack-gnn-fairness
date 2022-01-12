@@ -1,8 +1,7 @@
 from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
-from attack.sp_increase import SPI_heuristic, MetaSPI, SPI_modify_degree,SPI_modify_degree_inv,\
-    SPI_modify_both_degree, SPI_modify_both_degree_inv,SPI_modify1,RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
+from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
 from attack.fair_attack  import  Fair_Attack
 # from attack.metattackSA import MetattackSA
 # from attack.targeted_spi import RandomSPI, NettackSPI, TargetRewireSPI
@@ -46,18 +45,6 @@ def build_iter3(adj=None, features=None, labels=None, idx_train=None, idx_test=N
 
 def build_fair_attack(adj, features, labels, idx_train, idx_test, device):
     return Fair_Attack()
-
-def build_SPI_modify_degree(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return SPI_modify_degree()
-
-def build_SPI_modify_degree_inv(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return SPI_modify_degree_inv()
-
-def build_SPI_modify_both_degree(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return SPI_modify_both_degree()
-
-def build_SPI_modify_both_degree_inv(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
-    return SPI_modify_both_degree_inv()
 
 # def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
 #     return RandomSPI(device=device)
