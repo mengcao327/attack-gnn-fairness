@@ -67,16 +67,15 @@ parser.add_argument('--direction', type=str, default='y1s1',
 parser.add_argument('--strategy', type=str, default='DD',
                     choices=['DD', 'DE', 'ED', 'EE'],
                     help='FairAttack strategy indicating [D]ifferent/[E]qual label(y)|sens(s)')
-parser.add_argument('--deg', type=int, default=0, # may not finish on small datasets
-                    choices=[0,1,2,3],
+parser.add_argument('--deg', type=int, default=0,  # may not finish on small datasets
+                    choices=[0, 1, 2, 3],
                     help='Degree parameter, 0 for not considering degree, '
                          'd(high)>deg*d(low).')
 parser.add_argument('--deg_direction', type=str, default='null',
-                    choices=['hl', 'lh','null'],
+                    choices=['hl', 'lh', 'null'],
                     help='Direction of degree difference, '
                          'hl for (subject-influencer)=(high-low), and vice versa,'
                          'null for not considering degree.')
-
 
 # ----args for GSAGE
 parser.add_argument('--agg_type', type=str, default='mean',
@@ -406,8 +405,10 @@ for model_name in args.model:
             'parity',
             'equality',
             'eq_odds']
-        fname = '../results/result-' + str(args.dataset) + (('-'+args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
-                '-' + str(args.attack_type) + (('-'+args.direction+'-'+args.strategy+'-deg'+str(args.deg)+'-'+str(args.deg_direction)) if args.attack_type=='fair_attack' else '') + \
+        fname = '../results/result-' + str(args.dataset) + (
+            ('-' + args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
+                '-' + str(args.attack_type) + (('-' + args.direction + '-' + args.strategy + '-deg' + str(
+            args.deg) + '-' + str(args.deg_direction)) if args.attack_type == 'fair_attack' else '') + \
                 (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)

@@ -1,6 +1,7 @@
 from deeprobust.graph.defense import GCN
 import torch
 
+
 def fit_surrogate(adj, features, labels, idx_train, device):
     # Setup Surrogate Model
     surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,

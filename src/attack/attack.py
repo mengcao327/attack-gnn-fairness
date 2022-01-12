@@ -2,7 +2,7 @@ from deeprobust.graph.global_attack import Random, Metattack
 from attack.fast_dice import DICE
 from attack.sacide import SACIDE
 from attack.sp_increase import SPI_heuristic, MetaSPI, RewireSPI, RewireMetropolisHastingSPI, RandomMetropolisHastingSPI
-from attack.fair_attack  import  Fair_Attack
+from attack.fair_attack import Fair_Attack
 # from attack.metattackSA import MetattackSA
 # from attack.targeted_spi import RandomSPI, NettackSPI, TargetRewireSPI
 from structack.structack import build_custom
@@ -43,8 +43,10 @@ def build_iter2(adj=None, features=None, labels=None, idx_train=None, idx_test=N
 def build_iter3(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
     return RandomMetropolisHastingSPI()
 
+
 def build_fair_attack(adj, features, labels, idx_train, idx_test, device):
     return Fair_Attack()
+
 
 # def build_target_randomspi(adj=None, features=None, labels=None, idx_train=None, idx_test=None, device=None):
 #     return RandomSPI(device=device)
@@ -85,10 +87,13 @@ def attack_rewirespi(model, adj, features, labels, n_perturbations, idx_train, i
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
 
-def attack_fair_attack(model, adj, features, labels, sens, idx_train,n_perturbations,  direction, strategy,deg,deg_direction):
-    model.attack(adj, features, labels, sens, idx_train,n_perturbations,  direction, strategy,deg,deg_direction)
+
+def attack_fair_attack(model, adj, features, labels, sens, idx_train, n_perturbations, direction, strategy, deg,
+                       deg_direction):
+    model.attack(adj, features, labels, sens, idx_train, n_perturbations, direction, strategy, deg, deg_direction)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
+
 
 def postprocess_adj(adj):
     adj = normalize_adj(adj)
@@ -137,10 +142,12 @@ def apply_perturbation(model_builder, attack, args, adj, features, labels, sens,
     # perform the attack
     # modified_adj = attack(model, adj, features, labels, n_perturbations, idx_train, idx_unlabeled, sens)
 
-    if model_builder==build_fair_attack:
-        modified_adj = attack(model, adj, features, labels.to(device), sens.to(device), idx_train, n_perturbations, args.direction, args.strategy,args.deg,args.deg_direction)
+    if model_builder == build_fair_attack:
+        modified_adj = attack(model, adj, features, labels.to(device), sens.to(device), idx_train, n_perturbations,
+                              args.direction, args.strategy, args.deg, args.deg_direction)
     else:
-        modified_adj = attack(model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled, sens.to(device))
+        modified_adj = attack(model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled,
+                              sens.to(device))
     return modified_adj
 
 
@@ -276,14 +283,14 @@ def attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_
 
     if not os.path.exists(f'../dataset/cached_attacks/'):
         os.mkdir(f'../dataset/cached_attacks/')
-    attack_name=args.attack_type
+    attack_name = args.attack_type
     print(dataset_name)
     print(attack_name)
     print(ptb_rate)
     print(seed)
     if sens_attr == 'gender' and 'region_job' in dataset_name and attack_name == 'sacide':
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{sens_attr}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
-    elif attack_name=='fair_attack':
+    elif attack_name == 'fair_attack':
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{args.direction}_{args.strategy}_deg{str(args.deg)}_{args.deg_direction}_{ptb_rate:.2f}_{seed}.npz'
     else:
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
@@ -296,25 +303,25 @@ def attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
               'prbcd': build_prbcd, 'fair_attack': build_fair_attack}
-              # 'y1s1-DD': build_SPI_heuristic, 'metaspi': build_metaspi,
-              # 'MetaDiscriminator': build_MetaDiscriminator, 'rspis': build_rewirespi,
-              # 'iter3': build_iter3, 'iter2': build_iter2,
-              # 'MetaDiscriminator': build_MetaDiscriminator, 'metasa': build_MetaSA,
-              # 'iter3': build_iter3, 'iter2': build_iter2, 'target_randomspi': build_target_randomspi,
-              # 'target_nettackspi': build_target_nettackspi}
+    # 'y1s1-DD': build_SPI_heuristic, 'metaspi': build_metaspi,
+    # 'MetaDiscriminator': build_MetaDiscriminator, 'rspis': build_rewirespi,
+    # 'iter3': build_iter3, 'iter2': build_iter2,
+    # 'MetaDiscriminator': build_MetaDiscriminator, 'metasa': build_MetaSA,
+    # 'iter3': build_iter3, 'iter2': build_iter2, 'target_randomspi': build_target_randomspi,
+    # 'target_nettackspi': build_target_nettackspi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd,  'fair_attack': attack_fair_attack}
-               # 'y1s1-DD': attack_rewirespi, 'metaspi': attack_metaspi,
-               # 'MetaDiscriminator': attack_MetaDiscriminator, 'rspis': attack_rewirespi,
-               # 'iter3': attack_rewirespi, 'iter2': attack_rewirespi,
-               # 'prbcd': attack_prbcd, 'y1s1-DD-no-surrogate': attack_rewirespi,
-               # 'MetaDiscriminator': attack_MetaDiscriminator, 'metasa': attack_MetaSA,
-               # 'iter3': attack_rewirespi, 'iter2': attack_rewirespi, 'target_randomspi': attack_rewirespi,
-               # 'target_nettackspi': attack_rewirespi}
+               'prbcd': attack_prbcd, 'fair_attack': attack_fair_attack}
+    # 'y1s1-DD': attack_rewirespi, 'metaspi': attack_metaspi,
+    # 'MetaDiscriminator': attack_MetaDiscriminator, 'rspis': attack_rewirespi,
+    # 'iter3': attack_rewirespi, 'iter2': attack_rewirespi,
+    # 'prbcd': attack_prbcd, 'y1s1-DD-no-surrogate': attack_rewirespi,
+    # 'MetaDiscriminator': attack_MetaDiscriminator, 'metasa': attack_MetaSA,
+    # 'iter3': attack_rewirespi, 'iter2': attack_rewirespi, 'target_randomspi': attack_rewirespi,
+    # 'target_nettackspi': attack_rewirespi}
     baseline_attacks = list(builds.keys())
 
     if attack_name in baseline_attacks:
-        modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], args,adj, features, labels, sens,
+        modified_adj = apply_perturbation(builds[attack_name], attacks[attack_name], args, adj, features, labels, sens,
                                           idx_train, idx_val, idx_test, ptb_rate=ptb_rate, seed=seed,
                                           cuda=torch.cuda.is_available())
         print(f'Attack finished, returning perturbed graph')
