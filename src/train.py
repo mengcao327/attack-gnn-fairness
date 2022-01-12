@@ -48,7 +48,7 @@ parser.add_argument('--hidden', type=int, default=64,
                     help='Number of hidden units.')
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
-parser.add_argument('--attack_type', type=str, default='none',
+parser.add_argument('--attack_type', type=str, default='fair_attack',
                     # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
 parser.add_argument('--sensitive', type=str, default='region',
@@ -60,9 +60,29 @@ parser.add_argument('--ptb_rate', type=float, nargs='+', default=[0.05],
                     help="Attack perturbation rate [0-1]")
 parser.add_argument("--num_layers", type=int, default=2,
                     help="number of hidden layers")
+# ----args for FairAttack
+parser.add_argument('--direction', type=str, default='y1s1',
+                    choices=['y1s1', 'y1s0'],
+                    help='FairAttack direction')
+parser.add_argument('--strategy', type=str, default='DD',
+                    choices=['DD', 'DE', 'ED', 'EE'],
+                    help='FairAttack strategy indicating [D]ifferent/[E]qual label(y)|sens(s)')
+parser.add_argument('--deg', type=int, default=0, # may not finish on small datasets
+                    choices=[0,1,2,3],
+                    help='Degree parameter, 0 for not considering degree, '
+                         'd(high)>deg*d(low).')
+parser.add_argument('--deg_direction', type=str, default='null',
+                    choices=['hl', 'lh','null'],
+                    help='Direction of degree difference, '
+                         'hl for (subject-influencer)=(high-low), and vice versa,'
+                         'null for not considering degree.')
+
+
+# ----args for GSAGE
 parser.add_argument('--agg_type', type=str, default='mean',
                     choices=['gcn', 'mean', 'pool', 'lstm'],
                     help='Aggregator for GraphSAGE')
+
 # ----args for GAT
 parser.add_argument("--num_heads", type=int, default=8,
                     help="number of hidden attention heads")
@@ -130,7 +150,7 @@ for model_name in args.model:
                 load_dataset(args, seed)
 
             if args.attack_type != 'none':
-                adj = attack(args,args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
+                adj = attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
                              seed, dataset, sens_attr)
                 print("edge dist. after attack:")
                 check_dataset(dataset, adj, labels, sens, idx_train, idx_val, idx_test)
@@ -387,7 +407,8 @@ for model_name in args.model:
             'equality',
             'eq_odds']
         fname = '../results/result-' + str(args.dataset) + (('-'+args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
-                '-' + str(args.attack_type) + (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
+                '-' + str(args.attack_type) + (('-'+args.direction+'-'+args.strategy+'-deg'+str(args.deg)+'-'+str(args.deg_direction)) if args.attack_type=='fair_attack' else '') + \
+                (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
