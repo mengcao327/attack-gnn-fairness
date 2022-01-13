@@ -481,7 +481,7 @@ def attack(args,attack_name, ptb_rate, adj, features, labels, sens, idx_train, i
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'y1s1-DD-no-surrogate': build_SPI_heuristic, 'metaspi': build_metaspi,
+              'prbcd': build_prbcd, 'y1s1-DD': build_SPI_heuristic, 'metaspi': build_metaspi,
               'MetaDiscriminator': build_MetaDiscriminator, 'rspis': build_rewirespi,
               'iter3': build_iter3, 'iter2': build_iter2,
               'spimrr': build_SPI_modify_rev_rev,'spimy0s': build_SPI_modify_y0s,'spim0': build_SPI_modify_0,
@@ -496,10 +496,10 @@ def attack(args,attack_name, ptb_rate, adj, features, labels, sens, idx_train, i
               'iter3': build_iter3, 'iter2': build_iter2, 'target_randomspi': build_target_randomspi,
               'target_nettackspi': build_target_nettackspi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'y1s1-DD-no-surrogate': attack_rewirespi, 'metaspi': attack_metaspi,
+               'prbcd': attack_prbcd, 'y1s1-DD': attack_rewirespi, 'metaspi': attack_metaspi,
                'MetaDiscriminator': attack_MetaDiscriminator, 'rspis': attack_rewirespi,
                'iter3': attack_rewirespi, 'iter2': attack_rewirespi,
-               'prbcd': attack_prbcd, 'y1s1-DD-no-surrogate': attack_rewirespi, 'spim': attack_SPI_modify,'spimr': attack_SPI_modify_rev,
+               'prbcd': attack_prbcd, 'y1s1-DD': attack_rewirespi, 'spim': attack_SPI_modify,'spimr': attack_SPI_modify_rev,
                'spimrr': attack_SPI_modify_rev_rev,'spimy0s': attack_SPI_modify_y0s,'spim0': attack_SPI_modify_0,
                'spimy1s0': attack_SPI_modify_y1s0,'spimy1s': attack_SPI_modify_y1s,
                'spimd':attack_SPI_modify_degree,'spimdi':attack_SPI_modify_degree_inv,

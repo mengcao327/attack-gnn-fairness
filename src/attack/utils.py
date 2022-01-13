@@ -6,15 +6,16 @@ def fit_surrogate(adj, features, labels, idx_train, device):
     surrogate = GCN(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
                     dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
     surrogate = surrogate.to(device)
-    surrogate.fit(features, adj, labels, idx_train, train_iters=500)
+    surrogate.fit(features.to('cpu'), adj, labels.to('cpu'), idx_train, train_iters=500)
     return surrogate
 
 
 def compute_statistical_parity(sens, y):
-    y1 = y > .5
+
+    y1 = y == 1
     s1 = sens == 1
     s0 = sens == 0
-    y0 = y <= .5
+    y0 = y == 0
 
     y1s0 = y1 & s0
     y1s1 = y1 & s1
@@ -34,5 +35,5 @@ def test_surrogate(adj, features, labels, sens, idx_train, device):
     surrogate = fit_surrogate(adj, features, labels, idx_train, device)
     y = surrogate.predict(features, adj)
     y = y.max(1)[1]
-    print(f'dSP = {compute_statistical_parity(sens, y)}')
-    return torch.tensor(y > 0.5).type_as(labels)
+    print(f'dSP = {compute_statistical_parity(sens.to(device), y.to(device))}')
+    return torch.tensor(y).type_as(labels)
