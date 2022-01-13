@@ -460,19 +460,30 @@ def check_dataset(dataset,adj,labels,sens,idx_train,idx_val,idx_test):
     print("y0s1:",len(idx_y0s1)/len(idx_label_sens))
     print("y0s0:",len(idx_y0s0)/len(idx_label_sens))
 
-    # edges in 16 groups, row order: y1s1,y1s0,y0s1,y0s0
-    node_set=[idx_y1s1,idx_y1s0,idx_y0s1,idx_y0s0]
-    homo_edges=np.zeros((4,4))
+    # edges in 16 groups, row order: y0s0, y0s1, y1s0, y1s1
+    node_set = [idx_y0s0, idx_y0s1, idx_y1s0, idx_y1s1]
+    homo_edges = np.zeros((4, 4))
     for i in range(len(row)):
-        node_exist_row=True in [row[i] in node_set[k] for k in range(4)]
+        node_exist_row = True in [row[i] in node_set[k] for k in range(4)]
         if node_exist_row:
-            node_exist_col=True in [col[i] in node_set[k] for k in range(4)]
+            node_exist_col = True in [col[i] in node_set[k] for k in range(4)]
             if node_exist_col:
-                row_h=[row[i] in node_set[k] for k in range(4)].index(True)
-                col_h=[col[i] in node_set[k] for k in range(4)].index(True)
-                homo_edges[row_h][col_h]+=1
+                row_h = [row[i] in node_set[k] for k in range(4)].index(True)
+                col_h = [col[i] in node_set[k] for k in range(4)].index(True)
+                homo_edges[row_h][col_h] += 1
     print(homo_edges)
+    homo_edges_full = np.zeros((4, 4))
+    for i in range(4):
+        for j in range(i, 4):
+            if i == j:
+                homo_edges_full[i][j] = len(node_set[i]) * len(node_set[i]) - len(node_set[i])
+            else:
+                homo_edges_full[i][j] = len(node_set[i]) * len(node_set[j])
+                homo_edges_full[j][i] = homo_edges_full[i][j]
 
+    homo_edges_rate = homo_edges / homo_edges_full
+    fname = dataset + "_homo_edges_rate.csv"
+    np.savetxt(fname, homo_edges_rate, delimiter=",")
     # fname=dataset+"_homo_edges.csv"
     # np.savetxt(fname,homo_edges,delimiter=",")
 
