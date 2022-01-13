@@ -12,10 +12,11 @@ def fit_surrogate(adj, features, labels, idx_train, device):
 
 
 def compute_statistical_parity(sens, y):
-    y1 = y > .5
+
+    y1 = y == 1
     s1 = sens == 1
     s0 = sens == 0
-    y0 = y <= .5
+    y0 = y == 0
 
     y1s0 = y1 & s0
     y1s1 = y1 & s1
@@ -38,4 +39,4 @@ def test_surrogate(adj, features, labels, sens, idx_train, device):
     print(f"y device:{y.device}")
     print(f"sens device:{sens.device}")
     print(f'dSP = {compute_statistical_parity(sens.to(device), y.to(device))}')
-    return torch.tensor(y > 0.5).type_as(labels)
+    return torch.tensor(y).type_as(labels)
