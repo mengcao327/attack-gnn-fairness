@@ -4,7 +4,10 @@ import networkx as nx
 from attack.attack import attack
 import pandas as pd
 from community.community_louvain import best_partition
+from synth.evaluate import get_latent_and_prediction
 
+import torch
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 def homophily(G, prop, level='macro'):
     """
@@ -104,8 +107,8 @@ parser.add_argument('--sensitive', type=str, default='region',
 parser.add_argument(
     '--stats_type',
     type=str,
-    default='homophily',
-    choices=['homophily', 'community'])
+    default='latent',
+    choices=['homophily', 'community', 'latent', 'density'])
 parser.add_argument('--ptb_rate', type=float, nargs='+', default=[0.05,0.1,0.15,0.2,0.25,0.3],
                     help="Attack perturbation rate [0-1]")
 parser.add_argument('--seed', type=int, nargs='+', default=[42, 0, 1, 2, 100],
@@ -126,7 +129,7 @@ for ptb_rate in (args.ptb_rate if args.attack_type != 'none' else [0]):
             load_dataset(args, seed)
 
         if args.attack_type != 'none':
-            adj = attack(args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
+            adj = attack(args,args.attack_type, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
                          seed, dataset, sens_attr)
 
         G = nx.from_scipy_sparse_matrix(adj)
@@ -150,10 +153,18 @@ for ptb_rate in (args.ptb_rate if args.attack_type != 'none' else [0]):
                    "community_sens_correlation":community_sens_correlation,
                    "seed_comm":seed_comm,
                    } for community_label_correlation,community_sens_correlation,seed_comm in zip(community_label_correlations,community_sens_correlations,seeds)]
-
+        elif args.stats_type=='latent':
+            x,y = get_latent_and_prediction(adj,features,labels,idx_train,device)
+            row = {"ptb_rate": ptb_rate, "seed": seed,
+            'hidden_representations':"[" + ','.join(['['+','.join([str(b) for b in a])+']' for a in x.detach().to('cpu').numpy()]) + "]",
+            'label':f"[{','.join([str(a) for a in labels.detach().to('cpu').numpy()])}]",
+            'sens':f"[{','.join([str(a) for a in sens.detach().to('cpu').numpy()])}]"}
+        elif args.stats_type=='density':
+            pass
+        row['attack'] = args.attack_type
         df_stats = df_stats.append(row, ignore_index=True)
 
-fname = f'../results/stats-{args.stats_type}-' + str(args.dataset) + '-' + (sens_attr if 'pokec' in args.dataset else '') + \
+fname = f'../results/stats-{args.stats_type}-' + str(args.dataset) + ('-'+sens_attr if 'pokec' in args.dataset else '') + \
         '-' + str(args.attack_type) + '.csv'
 
 df_stats.to_csv(fname, index=False)
