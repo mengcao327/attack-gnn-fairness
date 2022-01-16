@@ -22,7 +22,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument(
     '--dataset',
     type=str,
-    default='nba',
+    default='credit',
     choices=[
         'pokec_z',
         'pokec_n',
@@ -61,7 +61,7 @@ parser.add_argument('--ptb_rate', type=float, nargs='+', default=[0.05],
 parser.add_argument("--num_layers", type=int, default=2,
                     help="number of hidden layers")
 # ----args for FairAttack
-parser.add_argument('--direction', type=str, default='y1s1',
+parser.add_argument('--direction', type=str, default='y1s0',
                     choices=['y1s1', 'y1s0'],
                     help='FairAttack direction')
 parser.add_argument('--strategy', type=str, default='DD',
@@ -128,8 +128,9 @@ parser.add_argument(
 args = parser.parse_known_args()[0]
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-seed_set = [42, 0, 1, 2, 100]
-# seed_set = [42]
+# seed_set = [42, 10, 1, 2, 100] # for german the seed 0 will have all predictions=1 for surrogate model
+seed_set = [42, 0, 1, 2, 100] # for datasets except german
+# seed_set = [0]
 
 # %%
 for model_name in args.model:

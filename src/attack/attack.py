@@ -89,8 +89,8 @@ def attack_rewirespi(model, adj, features, labels, n_perturbations, idx_train, i
 
 
 def attack_fair_attack(model, adj, features, labels, sens, idx_train, n_perturbations, direction, strategy, deg,
-                       deg_direction):
-    model.attack(adj, features, labels, sens, idx_train, n_perturbations, direction, strategy, deg, deg_direction)
+                       deg_direction,dataset):
+    model.attack(adj, features, labels, sens, idx_train, n_perturbations, direction, strategy, deg, deg_direction,dataset)
     modified_adj = model.modified_adj
     return postprocess_adj(modified_adj)
 
@@ -144,7 +144,7 @@ def apply_perturbation(model_builder, attack, args, adj, features, labels, sens,
 
     if model_builder == build_fair_attack:
         modified_adj = attack(model, adj, features, labels.to(device), sens.to(device), idx_train, n_perturbations,
-                              args.direction, args.strategy, args.deg, args.deg_direction)
+                              args.direction, args.strategy, args.deg, args.deg_direction, args.dataset)
     else:
         modified_adj = attack(model, adj, features, labels.to(device), n_perturbations, idx_train, idx_unlabeled,
                               sens.to(device))

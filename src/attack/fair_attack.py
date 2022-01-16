@@ -31,7 +31,7 @@ class Fair_Attack(BaseAttack):
         assert not self.attack_features, 'SPI_heuristic does NOT support attacking features'
 
     def attack(self, ori_adj, features, y, s, idx_train, n_perturbations, direction, strategy, deg, deg_direction,
-               **kwargs):
+               dataset, **kwargs):
         """
         Attempts to increase the statistical parity by linking nodes in [y1s1 or y1s0] to nodes in another
         group with [D]ifferent/[E]qual label(y)|sens(s), which corresponds to four types of strategies
@@ -47,8 +47,9 @@ class Fair_Attack(BaseAttack):
         """
         modified_adj = ori_adj.tolil()
 
-        y = test_surrogate(ori_adj, features, y, s, idx_train, device=self.device)
-
+        y = test_surrogate(ori_adj, features, y, s, idx_train, dataset, device=self.device)  # for german use a different surrogate
+        # y_s[idx_train]=y[idx_train] #label calibrate--in test  
+        # y=y_s
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
         s1 = s == 1
