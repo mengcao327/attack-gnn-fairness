@@ -28,7 +28,7 @@ class Fair_Attack(BaseAttack):
         super(Fair_Attack, self).__init__(model, nnodes, attack_structure=attack_structure,
                                           attack_features=attack_features, device=device)
 
-        assert not self.attack_features, 'SPI_heuristic does NOT support attacking features'
+        assert not self.attack_features, 'Fair_Attack does NOT support attacking features'
 
     def attack(self, ori_adj, features, y, s, idx_train, n_perturbations, direction, strategy, deg, deg_direction,
                dataset, **kwargs):
@@ -48,7 +48,7 @@ class Fair_Attack(BaseAttack):
         modified_adj = ori_adj.tolil()
 
         y = test_surrogate(ori_adj, features, y, s, idx_train, dataset, device=self.device)  # for german use a different surrogate
-        # y_s[idx_train]=y[idx_train] #label calibrate--in test  
+        # y_s[idx_train]=y[idx_train] #label calibrate--in test
         # y=y_s
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
@@ -85,7 +85,15 @@ class Fair_Attack(BaseAttack):
             influencer = list(np.random.choice(nodes_strategy, n_perturbations))
 
             assert (len(subject) == len(influencer))
-            dup_edges = modified_adj[subject, influencer].nnz
+            # remove duplicate in sampling
+            tu = [(subject[i], influencer[i]) for i in range(len(subject))]
+            ts = set(tu)
+            print(f"duplicate samples:{len(tu)-len(ts)}")
+            ts=list(ts)
+            subject = [ts[i][0] for i in range(len(ts))]
+            influencer = [ts[i][1] for i in range(len(ts))]
+
+            dup_edges = modified_adj[subject, influencer].nnz+(len(tu)-len(ts)) # existing edges+duplicate samples
             print(f'{dup_edges} edges already exist')
             if dup_edges > 0:
                 print(f"selecting {dup_edges} more edges..")
