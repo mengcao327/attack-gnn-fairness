@@ -48,7 +48,7 @@ parser.add_argument('--hidden', type=int, default=64,
                     help='Number of hidden units.')
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
-parser.add_argument('--attack_type', type=str, default='fair_attack',
+parser.add_argument('--attack_type', type=str, default='fair_attack_surrogate',
                     # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
 parser.add_argument('--sensitive', type=str, default='region',
@@ -151,7 +151,7 @@ for model_name in args.model:
 
             if args.attack_type != 'none':
                 adj = attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
-                             seed, dataset, sens_attr)
+                             seed, dataset, sens_attr, idx_sens_train)
                 print("edge dist. after attack:")
                 check_dataset(dataset, adj, labels, sens, idx_train, idx_val, idx_test)
 
@@ -409,7 +409,7 @@ for model_name in args.model:
         fname = '../results/result-' + str(args.dataset) + (
             ('-' + args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
                 '-' + str(args.attack_type) + (('-' + args.direction + '-' + args.strategy + '-deg' + str(
-            args.deg) + '-' + str(args.deg_direction)) if args.attack_type == 'fair_attack' else '') + \
+            args.deg) + '-' + str(args.deg_direction)) if args.attack_type == 'fair_attack_surrogate' else '') + \
                 (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
