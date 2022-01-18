@@ -47,9 +47,10 @@ class Fair_Attack(BaseAttack):
         """
         modified_adj = ori_adj.tolil()
 
-        y = test_surrogate(ori_adj, features, y, s, idx_train, dataset, device=self.device)  # for german use a different surrogate
-        # y_s[idx_train]=y[idx_train] #label calibrate--in test
-        # y=y_s
+        y_s = test_surrogate(ori_adj, features, y, s, idx_train, dataset, device=self.device)  # for german use a different surrogate
+        # label calibration
+        y_s[idx_train]=y[idx_train] #label calibrate--in test
+        y=y_s
         # remember that we might have s[i]=-1 when the sensitive attribute is not available
         y1 = y == 1
         s1 = s == 1
