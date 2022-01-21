@@ -5,10 +5,12 @@ import scipy.sparse as sp
 from deeprobust.graph import utils
 import torch.nn.functional as F
 
-if __name__ == "__main__":
-    from models import *
-else:
-    from src.synth.models import *
+from models import *
+# if __name__ == "__main__":
+#     from models import *
+# else:
+#     from src.synth.models import *
+
 import networkx as nx
 import numpy as np
 
@@ -70,8 +72,7 @@ class GCN2(GCN):
             return self.forward2(self.features, self.adj_norm)
 
 
-def evaluate(G, seed, cluster_size):
-    adj, features, labels, sens, train_idx, val_idx, test_idx = generate_graph(G, seed, cluster_size=cluster_size)
+def get_latent_and_prediction(adj,features,labels,train_idx,device):
 
     gcn = GCN2(nfeat=features.shape[1], nclass=labels.max().item() + 1, nhid=16,
               dropout=0.5, with_relu=False, with_bias=True, weight_decay=5e-4, device=device)
@@ -83,6 +84,13 @@ def evaluate(G, seed, cluster_size):
     y = gcn.predict(features.to('cpu'), adj)
     x = gcn.get_hidden_representations(features.to('cpu'), adj)
     y = y.max(1)[1]
+
+    return x,y
+
+def evaluate(G, seed, cluster_size):
+    adj, features, labels, sens, train_idx, val_idx, test_idx = generate_graph(G, seed, cluster_size=cluster_size)
+    
+    x, y = get_latent_and_prediction(adj,features,labels,train_idx,device)
 
     return compute_accuracy(labels[test_idx].to('cpu').numpy(), y[test_idx].to('cpu').numpy()), compute_statistical_parity(sens[test_idx], y[test_idx]), x.detach().to('cpu').numpy()
 

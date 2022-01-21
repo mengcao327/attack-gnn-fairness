@@ -48,13 +48,14 @@ class Fair_Attack(BaseAttack):
         """
         modified_adj = ori_adj.tolil()
 
-
-        y_s = test_surrogate(ori_adj, features, y, s, idx_train, dataset, device=self.device)  # for german use a different surrogate
+        print("Training surrogate to get labels")
+        y_s = test_surrogate(ori_adj, features, y, idx_train, dataset, device=self.device)  # for german use a different surrogate
         # label calibration
         y_s[idx_train]=y[idx_train] #label calibrate--in test
         y=y_s
         
-        if sens_surrogate:
+        if self.sens_surrogate:
+            print("Training surrogate to get sens")
             s_s = test_surrogate(ori_adj, features, s, idx_sens_train, dataset, device=self.device)  # for german use a different surrogate
             # sens calibration
             s_s[idx_sens_train]=y[idx_sens_train] #label calibrate--in test

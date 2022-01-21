@@ -381,11 +381,11 @@ def compute_statistical_parity(sens, y):
     return dSP
 
 
-def test_surrogate(adj, features, labels, sens, idx_train, dataset, device):
+def test_surrogate(adj, features, labels, idx_train, dataset, device):
     surrogate = fit_surrogate(adj, features, labels, idx_train, dataset, device)
     y = surrogate.predict(features, adj)
     y = y.max(1)[1]
-    print(f"y device:{y.device}")
-    print(f"sens device:{sens.device}")
-    print(f'dSP = {compute_statistical_parity(sens.to(device), y.to(device))}')
+    # print(f"y device:{y.device}")
+    # print(f"sens device:{sens.device}")
+    # print(f'dSP = {compute_statistical_parity(sens.to(device), y.to(device))}')
     return torch.tensor(y).type_as(labels)
