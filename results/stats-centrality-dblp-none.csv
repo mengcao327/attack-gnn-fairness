@@ -1,2 +1,0 @@
-ptb_rate,seed,degree_centrality,degree_centrality_train,degree_centrality_val,degree_centrality_test,pagerank,pagerank_train,pagerank_val,pagerank_test
-0.0,0.0,0.0003838418309956074,0.0005067871388215877,0.0005215370530916006,0.0005343203387791131,4.972403162448411e-05,6.403939542630818e-05,6.417534856720986e-05,6.75219461023364e-05
