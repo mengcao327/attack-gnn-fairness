@@ -19,7 +19,7 @@ def get_strategy_nodeset(direction, strategy):
     y, s = bool(int(direction[1])), bool(int(direction[3]))
     y_ = y if strategy[0] == 'E' else not y
     s_ = s if strategy[1] == 'E' else not s
-    return str(int(y_)) + str(int(s_))
+    return str(int(y)) + str(int(s)), str(int(y_)) + str(int(s_))
 
 
 class Fair_Attack(BaseAttack):
@@ -87,8 +87,9 @@ class Fair_Attack(BaseAttack):
 
         n_map = {'00': nodes_y0s0, '10': nodes_y1s0, '01': nodes_y0s1, '11': nodes_y1s1}
 
-        nodes_direction = nodes_y1s1 if direction == 'y1s1' else nodes_y1s0
-        nodes_strategy = n_map[get_strategy_nodeset(direction, strategy)]
+        # nodes_direction = nodes_y1s1 if direction == 'y1s1' else nodes_y1s0
+        nd,ns=get_strategy_nodeset(direction, strategy)
+        nodes_direction, nodes_strategy = n_map[nd],n_map[ns]
 
         if deg == 0:  # don't consider degree
             assert (deg_direction == 'null')

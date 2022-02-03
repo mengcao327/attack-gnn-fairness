@@ -22,7 +22,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 parser.add_argument(
     '--dataset',
     type=str,
-    default='credit',
+    default='dblp',
     choices=[
         'pokec_z',
         'pokec_n',
@@ -31,7 +31,9 @@ parser.add_argument(
         'german',
         'bail',
         'dblp'])
-parser.add_argument('--train_percent', type=float, default=0.5,
+parser.add_argument('--train_percent_atk', type=float, default=0.5,
+                    help='Percentage of labeled data as train set.')
+parser.add_argument('--train_percent_gnn', type=float, default=0.5,
                     help='Percentage of labeled data as train set.')
 parser.add_argument('--val_percent', type=float, default=0.25,
                     help='Percentage of labeled data as validation set.')
@@ -48,7 +50,7 @@ parser.add_argument('--hidden', type=int, default=64,
                     help='Number of hidden units.')
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
-parser.add_argument('--attack_type', type=str, default='fair_attack_surrogate',
+parser.add_argument('--attack_type', type=str, default='fair_attack',
                     # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
                     help='Adversarial attack type.')
 parser.add_argument('--sensitive', type=str, default='region',
@@ -61,8 +63,8 @@ parser.add_argument('--ptb_rate', type=float, nargs='+', default=[0.05],
 parser.add_argument("--num_layers", type=int, default=2,
                     help="number of hidden layers")
 # ----args for FairAttack
-parser.add_argument('--direction', type=str, default='y1s0',
-                    choices=['y1s1', 'y1s0'],
+parser.add_argument('--direction', type=str, default='y1s1',
+                    choices=['y1s1', 'y1s0','y0s0','y0s1'],
                     help='FairAttack direction')
 parser.add_argument('--strategy', type=str, default='DD',
                     choices=['DD', 'DE', 'ED', 'EE'],
@@ -146,18 +148,19 @@ for model_name in args.model:
 
             # Load data
             print(args.dataset)
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number = \
+            adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number = \
                 load_dataset(args, seed)
 
             if args.attack_type != 'none':
-                adj = attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_test,
+                adj = attack(args, ptb_rate, adj, features, labels, sens, idx_train_atk, idx_val, idx_test,
                              seed, dataset, sens_attr, idx_sens_train)
                 print("edge dist. after attack:")
-                check_dataset(dataset, adj, labels, sens, idx_train, idx_val, idx_test)
+                check_dataset(dataset, adj, labels, sens, idx_train_gnn, idx_val, idx_test)
 
             print("Test samples:", len(idx_test))
             if sens_attr:
                 sens[sens > 0] = 1
+            idx_train=idx_train_gnn
             # from torch_geometric.utils import dropout_adj, convert
             # edge_index = convert.from_scipy_sparse_matrix(adj)[0]
             G = dgl.from_scipy(adj)
@@ -409,8 +412,8 @@ for model_name in args.model:
         fname = '../results/result-' + str(args.dataset) + (
             ('-' + args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
                 '-' + str(args.attack_type) + (('-' + args.direction + '-' + args.strategy + '-deg' + str(
-            args.deg) + '-' + str(args.deg_direction)) if args.attack_type == 'fair_attack_surrogate' else '') + \
-                (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '.csv'
+            args.deg) + '-' + str(args.deg_direction)) if args.attack_type == 'fair_attack' else '') + \
+                (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') +  '-'+ str(args.train_percent_atk)+ '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()

@@ -63,11 +63,12 @@ def load_dataset(args, seed):
             # seed=20
             path = "../dataset/NBA"
             test_idx = False
-        adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_pokec(dataset,
+        adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train = load_pokec(dataset,
                                                                                                sens_attr,
                                                                                                predict_attr,
                                                                                                path=path,
-                                                                                               train_percent=args.train_percent,
+                                                                                               train_percent_atk=args.train_percent_atk,
+                                                                                               train_percent_gnn=args.train_percent_gnn,
                                                                                                val_percent=args.val_percent,
                                                                                                sens_number=sens_number,
                                                                                                seed=seed,
@@ -132,11 +133,12 @@ def load_dataset(args, seed):
             predict_attr = "label"
             path = "../dataset/dblp/"
             # label_number = 1000
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_dblp(args.dataset,
+            adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train = load_dblp(args.dataset,
                                                                                                   sens_attr,
                                                                                                   predict_attr,
                                                                                                   path=path,
-                                                                                                  train_percent=args.train_percent,
+                                                                                                  train_percent_atk=args.train_percent_atk,
+                                                                                                  train_percent_gnn=args.train_percent_gnn,
                                                                                                   val_percent=args.val_percent,
                                                                                                   sens_number=args.sens_number,
                                                                                                   seed=seed)
@@ -146,7 +148,7 @@ def load_dataset(args, seed):
         else:
             print('Invalid dataset name!!')
             exit(0)
-    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number
+    return adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number
 
 
 def encode_onehot(labels):
@@ -268,7 +270,8 @@ def load_pokec(
         sens_attr,
         predict_attr,
         path="../dataset/pokec/",
-        train_percent=0.5,
+        train_percent_atk=0.5,
+        train_percent_gnn=0.5,
         val_percent=0.25,
         sens_number=500,
         seed=42,
@@ -332,15 +335,16 @@ def load_pokec(
     label_idx = np.where(labels >= 0)[0]
     random.shuffle(label_idx)
     # print("num labels:", len(label_idx))
-
-    idx_train = label_idx[:int(train_percent * len(label_idx))]
-    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
+    # test_percent=0.25
+    idx_train_gnn = label_idx[:int(train_percent_gnn * len(label_idx))]
+    idx_train_atk = label_idx[:int(train_percent_atk * len(label_idx))]
+    idx_val = label_idx[int(train_percent_gnn * len(label_idx)):int((train_percent_gnn + val_percent) * len(label_idx))]
     if test_idx:
-        idx_test = label_idx[int(train_percent * len(label_idx)):]
+        idx_test = label_idx[int(train_percent_gnn * len(label_idx)):]
         idx_val = idx_test
     else:
         idx_test = label_idx[int(
-            (train_percent + val_percent) * len(label_idx)):]
+            (train_percent_gnn + val_percent) * len(label_idx)):]
 
     labels[labels > 1] = 1
 
@@ -349,7 +353,10 @@ def load_pokec(
     print("num nodes with sa:", len(sens_idx))
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
 
-    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
+    if len(idx_test)>len(idx_val):
+        idx_test=idx_test[:len(idx_val)]
+
+    check_dataset(dataset,adj,labels, sens, idx_train_gnn, idx_val, idx_test)
     # so the true number of edges should be (nnz-selfloop)/2 in adj
     adj = adj + sp.eye(adj.shape[0])  # add self loop
 
@@ -359,13 +366,14 @@ def load_pokec(
     random.shuffle(idx_sens_train)
     idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
 
-    idx_train = torch.LongTensor(idx_train)
+    idx_train_gnn = torch.LongTensor(idx_train_gnn)
+    idx_train_atk = torch.LongTensor(idx_train_atk)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
 
     # random.shuffle(sens_idx)
 
-    return adj, features, labels, idx_train, idx_val, idx_test, sens,idx_sens_train
+    return adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens,idx_sens_train
 
 
 def preprocess_pokec_complete_accounts(adj, features, labels, sens, seed):
@@ -497,10 +505,13 @@ def check_dataset(dataset,adj,labels,sens,idx_train,idx_val,idx_test):
     print("y0s1:",len(idx_y0s1)/len(idx_label_sens))
     print("y0s0:",len(idx_y0s0)/len(idx_label_sens))
 
-    homo_edges_rate = get_density_matrix(adj,labels,sens)
+    # save edge rate file-------------------------------------
+    # homo_edges_rate = get_density_matrix(adj,labels,sens)
+    #
+    # fname = dataset + "_homo_edges_rate.csv"
+    # np.savetxt(fname, homo_edges_rate, delimiter=",")
+    #---------------------------------------------------------
 
-    fname = dataset + "_homo_edges_rate.csv"
-    np.savetxt(fname, homo_edges_rate, delimiter=",")
     # fname=dataset+"_homo_edges.csv"
     # np.savetxt(fname,homo_edges,delimiter=",")
 
@@ -512,7 +523,8 @@ def load_dblp(dataset,
               sens_attr,
               predict_attr,
               path="../dataset/dblp/",
-              train_percent=0.5,
+              train_percent_atk=0.5,
+              train_percent_gnn=0.5,
               val_percent=0.25,
               sens_number=200,
               seed=42):
@@ -579,10 +591,12 @@ def load_dblp(dataset,
     label_idx = np.where(labels > 0)[0]
     random.shuffle(label_idx)
     # print("num labels:", len(label_idx))
+    # test_percent=0.25
 
-    idx_train = label_idx[:int(train_percent * len(label_idx))]
-    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent+val_percent) * len(label_idx))]
-    idx_test = label_idx[int((train_percent+val_percent) * len(label_idx)):]
+    idx_train_gnn = label_idx[:int(train_percent_gnn * len(label_idx))]
+    idx_train_atk = label_idx[:int(train_percent_atk * len(label_idx))]
+    idx_val = label_idx[int(train_percent_gnn * len(label_idx)):int((train_percent_gnn+val_percent) * len(label_idx))]
+    idx_test = label_idx[int((train_percent_gnn+val_percent) * len(label_idx)):]
 
     labels[labels ==0] = -1
     labels[labels > 1] = 0  # 1:database 0: DM,IR,ML combined
@@ -590,8 +604,10 @@ def load_dblp(dataset,
     sens_idx = set(np.where(sens >= 0)[0])
 
     idx_test = np.asarray(list(sens_idx & set(idx_test)))
+    if len(idx_test)>len(idx_val):
+        idx_test=idx_test[:len(idx_val)]
 
-    check_dataset(dataset,adj,labels,sens,idx_train,idx_val,idx_test)
+    check_dataset(dataset,adj,labels,sens,idx_train_gnn,idx_val,idx_test)
     adj = adj + sp.eye(adj.shape[0])
 
     sens = torch.FloatTensor(sens)
@@ -600,10 +616,11 @@ def load_dblp(dataset,
     random.shuffle(idx_sens_train)
     idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
 
-    idx_train = torch.LongTensor(idx_train)
+    idx_train_gnn = torch.LongTensor(idx_train_gnn)
+    idx_train_atk = torch.LongTensor(idx_train_atk)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
-    return adj, features, labels, idx_train, idx_val, idx_test, sens,idx_sens_train
+    return adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens,idx_sens_train
 
 
 def load_attacked_graph(

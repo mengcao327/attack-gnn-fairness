@@ -288,10 +288,11 @@ def attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_
     print(attack_name)
     print(ptb_rate)
     print(seed)
+    print(args.train_percent_atk)
     if sens_attr == 'gender' and 'region_job' in dataset_name and attack_name == 'sacide':
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{sens_attr}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
     elif 'fair_attack' in attack_name:
-        cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{args.direction}_{args.strategy}_deg{str(args.deg)}_{args.deg_direction}_{ptb_rate:.2f}_{seed}.npz'
+        cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{args.direction}_{args.strategy}_deg{str(args.deg)}_{args.deg_direction}_{ptb_rate:.2f}_train{str(args.train_percent_atk)}_{seed}.npz'
     else:
         cached_filename = f'../dataset/cached_attacks/{dataset_name}_{attack_name}_{ptb_rate:.2f}_{seed}.npz'
     # check if modified_adj of (dataset_name, attack_name, ptb_rate, seed) are stored
@@ -302,7 +303,7 @@ def attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_
         return modified_adj
     print(f'Applying {attack_name} attack to input graph')
     builds = {'random': build_random, 'dice': build_dice, 'metattack': build_metattack, 'sacide': build_sacide,
-              'prbcd': build_prbcd, 'fair_attack_surrogate': build_fair_attack}
+              'prbcd': build_prbcd, 'fair_attack': build_fair_attack}
     # 'y1s1-DD': build_SPI_heuristic, 'metaspi': build_metaspi,
     # 'MetaDiscriminator': build_MetaDiscriminator, 'rspis': build_rewirespi,
     # 'iter3': build_iter3, 'iter2': build_iter2,
@@ -310,7 +311,7 @@ def attack(args, ptb_rate, adj, features, labels, sens, idx_train, idx_val, idx_
     # 'iter3': build_iter3, 'iter2': build_iter2, 'target_randomspi': build_target_randomspi,
     # 'target_nettackspi': build_target_nettackspi}
     attacks = {'random': attack_random, 'dice': attack_dice, 'metattack': attack_metattack, 'sacide': attack_sacide,
-               'prbcd': attack_prbcd, 'fair_attack_surrogate': attack_fair_attack}
+               'prbcd': attack_prbcd, 'fair_attack': attack_fair_attack}
     # 'y1s1-DD': attack_rewirespi, 'metaspi': attack_metaspi,
     # 'MetaDiscriminator': attack_MetaDiscriminator, 'rspis': attack_rewirespi,
     # 'iter3': attack_rewirespi, 'iter2': attack_rewirespi,
