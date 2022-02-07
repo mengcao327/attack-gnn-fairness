@@ -19,20 +19,10 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 '''
             Dataset args
 '''
-parser.add_argument(
-    '--dataset',
-    type=str,
-    default='dblp',
-    choices=[
-        'pokec_z',
-        'pokec_n',
-        'nba',
-        'credit',
-        'german',
-        'bail',
-        'dblp'])
+parser.add_argument('--dataset', type=str, default='dblp',
+                    choices=['pokec_z', 'pokec_n', 'dblp'])
 parser.add_argument('--train_percent_atk', type=float, default=0.5,
-                    help='Percentage of labeled data as train set.')
+                    help='Percentage of labeled data available to the attacker.')
 parser.add_argument('--train_percent_gnn', type=float, default=0.5,
                     help='Percentage of labeled data as train set.')
 parser.add_argument('--val_percent', type=float, default=0.25,
@@ -64,7 +54,7 @@ parser.add_argument("--num_layers", type=int, default=2,
                     help="number of hidden layers")
 # ----args for FairAttack
 parser.add_argument('--direction', type=str, default='y1s1',
-                    choices=['y1s1', 'y1s0','y0s0','y0s1'],
+                    choices=['y1s1', 'y1s0', 'y0s0', 'y0s1'],
                     help='FairAttack direction')
 parser.add_argument('--strategy', type=str, default='DD',
                     choices=['DD', 'DE', 'ED', 'EE'],
@@ -131,7 +121,7 @@ args = parser.parse_known_args()[0]
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # seed_set = [42, 10, 1, 2, 100] # for german the seed 0 will have all predictions=1 for surrogate model
-seed_set = [42, 0, 1, 2, 100] # for datasets except german
+seed_set = [42, 0, 1, 2, 100]  # for datasets except german
 # seed_set = [0]
 
 # %%
@@ -160,7 +150,7 @@ for model_name in args.model:
             print("Test samples:", len(idx_test))
             if sens_attr:
                 sens[sens > 0] = 1
-            idx_train=idx_train_gnn
+            idx_train = idx_train_gnn
             # from torch_geometric.utils import dropout_adj, convert
             # edge_index = convert.from_scipy_sparse_matrix(adj)[0]
             G = dgl.from_scipy(adj)
@@ -413,19 +403,9 @@ for model_name in args.model:
             ('-' + args.sensitive) if 'pokec' in args.dataset else '') + '-' + str(model_name) + \
                 '-' + str(args.attack_type) + (('-' + args.direction + '-' + args.strategy + '-deg' + str(
             args.deg) + '-' + str(args.deg_direction)) if args.attack_type == 'fair_attack' else '') + \
-                (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') +  '-'+ str(args.train_percent_atk)+ '.csv'
+                (f'-{ptb_rate:.2f}' if args.attack_type != 'none' else '') + '-' + str(args.train_percent_atk) + '.csv'
         with open(fname, 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(FINAL_RESULT_DICT_LIST)
         f.close()
-
-        # check loss ---
-        # import matplotlib.pyplot as plt
-        # x = np.arange(0, len(loss_all))
-        # plt.figure()
-        # plt.plot(x, loss_all)
-        # plt.title("loss " + args.dataset)
-        # plt.xlabel('epochs')
-        # plt.ylabel('loss')
-        # plt.show()
