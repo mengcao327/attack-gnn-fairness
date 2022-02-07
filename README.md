@@ -6,4 +6,4 @@ pokec_z, pokec_n, nba, credit, german, bail, dblp
 ## models
 GCN, GAT, GraphSAGE, FairGNN
 
-
+sync test
