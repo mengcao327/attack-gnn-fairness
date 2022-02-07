@@ -51,7 +51,7 @@ parser.add_argument('--hidden', type=int, default=64,
 parser.add_argument('--dropout', type=float, default=0.6,
                     help='Dropout rate (1 - keep probability).')
 parser.add_argument('--attack_type', type=str, default='fair_attack',
-                    # choices=['none', 'random', 'dice', 'metattack', 'sacide', 'structack_dg_comm', 'structack_pr_katz'],
+                    choices=['none', 'random', 'dice', 'fair_attack'],
                     help='Adversarial attack type.')
 parser.add_argument('--sensitive', type=str, default='region',
                     choices=['gender', 'region'],
