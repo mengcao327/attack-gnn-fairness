@@ -1,0 +1,155 @@
+aif360==0.4.0
+argon2-cffi==21.1.0
+astor==0.8.1
+attrs==21.2.0
+backcall==0.2.0
+bleach==4.1.0
+Bottleneck @ file:///tmp/build/80754af9/bottleneck_1607575130224/work
+brotlipy==0.7.0
+certifi==2020.6.20
+cffi @ file:///tmp/build/80754af9/cffi_1625814692085/work
+chardet @ file:///tmp/build/80754af9/chardet_1607706775000/work
+click==7.1.2
+cloudpickle==1.6.0
+colorama @ file:///home/conda/feedstock_root/build_artifacts/colorama_1602866480661/work
+community==1.0.0b1
+contextlib2==21.6.0
+cryptography @ file:///tmp/build/80754af9/cryptography_1616767007030/work
+cycler==0.10.0
+dask==2021.1.1
+debugpy==1.5.1
+decorator==4.4.2
+deeprobust==0.2.2
+defusedxml==0.7.1
+dgl==0.7.0
+entrypoints==0.3
+filelock==3.3.2
+Flask==2.0.2
+future==0.18.2
+gensim==3.8.3
+googledrivedownloader @ file:///home/conda/feedstock_root/build_artifacts/googledrivedownloader_1619807768586/work
+HeapDict==1.0.1
+hyperopt==0.1.2
+ica==1.0
+idna @ file:///home/linux1/recipes/ci/idna_1610986105248/work
+imageio==2.9.0
+iniconfig==1.1.1
+ipdb==0.13.9
+ipykernel==6.5.0
+ipython==7.29.0
+ipython-genutils==0.2.0
+itsdangerous==2.0.1
+jedi==0.18.0
+jieba==0.42.1
+Jinja2==2.11.2
+joblib @ file:///home/conda/feedstock_root/build_artifacts/joblib_1612898609989/work
+json-tricks==3.15.5
+jsonschema==4.2.1
+jupyter-client==7.0.6
+jupyter-core==4.9.1
+jupyterlab-pygments==0.1.2
+kiwisolver==1.3.1
+llvmlite==0.37.0
+locket==0.2.1
+Markdown==3.3.3
+MarkupSafe==1.1.1
+matplotlib==3.3.3
+matplotlib-inline==0.1.3
+memory-profiler==0.58.0
+mistune==0.8.4
+mkl-fft==1.3.0
+mkl-random @ file:///tmp/build/80754af9/mkl_random_1626186066731/work
+mkl-service==2.4.0
+msgpack==1.0.2
+multipledispatch==0.6.0
+nbclient==0.5.5
+nbconvert==6.2.0
+nbformat==5.1.3
+nest-asyncio==1.5.1
+networkx==2.5
+nltk==3.6.7
+nni==2.5
+notebook==6.4.5
+numba==0.54.1
+numexpr @ file:///tmp/build/80754af9/numexpr_1618856529730/work
+numpy @ file:///tmp/build/80754af9/numpy_and_numpy_base_1626264704411/work
+olefile==0.46
+packaging==20.8
+pandas==1.3.1
+pandocfilters==1.5.0
+param==1.10.1
+parso==0.8.1
+partd==1.1.0
+pexpect==4.8.0
+pickleshare==0.7.5
+Pillow @ file:///tmp/build/80754af9/pillow_1625655408865/work
+pluggy==1.0.0
+prettytable==2.4.0
+prometheus-client==0.12.0
+prompt-toolkit==3.0.8
+protobuf==3.14.0
+psutil==5.8.0
+ptyprocess==0.6.0
+py==1.11.0
+pycparser @ file:///tmp/build/80754af9/pycparser_1594388511720/work
+pyct==0.4.8
+Pygments==2.7.3
+pymongo==3.12.1
+pyOpenSSL @ file:///tmp/build/80754af9/pyopenssl_1608057966937/work
+pyparsing==2.4.7
+pyrsistent==0.18.0
+PySocks @ file:///tmp/build/80754af9/pysocks_1605305812635/work
+pytest==6.2.5
+python-dateutil==2.8.1
+python-louvain @ file:///home/conda/feedstock_root/build_artifacts/python-louvain_1609125227889/work
+PythonWebHDFS==0.2.3
+pytz==2020.1
+pyviz-comms==2.0.1
+PyWavelets==1.1.1
+PyYAML==5.3.1
+pyzmq==22.3.0
+regex==2021.11.10
+requests @ file:///tmp/build/80754af9/requests_1608241421344/work
+responses==0.15.0
+schema==0.7.4
+scikit-image==0.18.3
+scikit-learn @ file:///home/conda/feedstock_root/build_artifacts/scikit-learn_1619628589477/work
+scipy==1.5.4
+seaborn==0.11.2
+Send2Trash==1.8.0
+shap==0.40.0
+simplejson==3.17.5
+six @ file:///tmp/build/80754af9/six_1623709665295/work
+sklearn==0.0
+slicer==0.0.7
+smart-open==5.2.1
+sortedcontainers==2.3.0
+tblib==1.7.0
+tempeh==0.1.12
+tensorboardX==2.4
+terminado==0.12.1
+testpath==0.5.0
+texttable==1.6.4
+threadpoolctl @ file:///home/conda/feedstock_root/build_artifacts/threadpoolctl_1626092076920/work
+tifffile==2020.12.8
+toml==0.10.2
+toolz==0.11.1
+torch==1.9.0
+torch-cluster @ file:///usr/share/miniconda/envs/test/conda-bld/pytorch-cluster_1631030483898/work
+torch-geometric @ file:///usr/share/miniconda/envs/test/conda-bld/pyg_1631775779966/work
+torch-scatter @ file:///usr/share/miniconda/envs/test/conda-bld/pytorch-scatter_1634901852465/work
+torch-sparse @ file:///usr/share/miniconda/envs/test/conda-bld/pytorch-sparse_1631191001774/work
+torch-spline-conv @ file:///usr/share/miniconda/envs/test/conda-bld/pytorch-spline-conv_1631008689719/work
+torchaudio==0.9.0a0+33b2469
+torchvision==0.10.0
+tornado==6.1
+tqdm==4.55.0
+traitlets==5.0.5
+typing-extensions==3.7.4.3
+urllib3==1.26.2
+wcwidth==0.2.5
+webencodings==0.5.1
+websockets==10.0
+Werkzeug==2.0.2
+yacs==0.1.6
+zict==2.0.0
