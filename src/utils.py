@@ -32,7 +32,7 @@ def load_perturbed_adj(dataset_name, attack_name, ptb_rate, seed):
 
 def load_dataset(args, seed):
     sens_number=args.sens_number
-    if args.dataset in ['pokec_z', 'pokec_n', 'nba']:
+    if args.dataset in ['pokec_z', 'pokec_n']:
         if args.dataset == 'pokec_z':
             sens_attr = args.sensitive
             dataset = 'region_job'
@@ -54,15 +54,6 @@ def load_dataset(args, seed):
             path = "../dataset/pokec/"
             test_idx = False
 
-        elif args.dataset == 'nba':
-            dataset = 'nba'
-            sens_attr = "country"
-            predict_attr = "SALARY"
-            # label_number = 200
-            sens_number = 50
-            # seed=20
-            path = "../dataset/NBA"
-            test_idx = False
         adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train = load_pokec(dataset,
                                                                                                sens_attr,
                                                                                                predict_attr,
@@ -82,72 +73,27 @@ def load_dataset(args, seed):
         #                                                                                                    sens,
         #                                                                                                    seed)
         #     dataset += '_completed_accounts'
-
-        if args.dataset == "nba":
-            features = feature_norm(features)
-    else:
-        # Load credit_scoring dataset
-        if args.dataset == 'credit':
-            dataset = 'credit'
-            sens_attr = "Age"  # column number after feature process is 1
-            sens_idx = 1
-            predict_attr = 'NoDefaultNextMonth'
-            # label_number = 6000
-            path_credit = "../dataset/credit"
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_credit(
-                args.dataset, sens_attr, predict_attr, path=path_credit, train_percent=args.train_percent,
-                val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
-            norm_features = feature_norm(features)
-            norm_features[:, sens_idx] = features[:, sens_idx]
-            features = norm_features
-
-        # Load german dataset
-        elif args.dataset == 'german':
-            dataset = 'german'
-            sens_attr = "Gender"  # column number after feature process is 0
-            sens_idx = 0
-            predict_attr = "GoodCustomer"
-            # label_number = 100
-            path_german = "../dataset/german"
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_german(
-                args.dataset, sens_attr, predict_attr, path=path_german, train_percent=args.train_percent,
-                val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
-        # Load bail dataset
-        elif args.dataset == 'bail':
-            dataset = 'bail'
-            sens_attr = "WHITE"  # column number after feature process is 0
-            sens_idx = 0
-            predict_attr = "RECID"
-            # label_number = 100
-            path_bail = "../dataset/bail"
-            adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train = load_bail(
-                args.dataset, sens_attr, predict_attr, path=path_bail, train_percent=args.train_percent,
-                val_percent=args.val_percent, sens_number=args.sens_number, seed=seed)
-            norm_features = feature_norm(features)
-            norm_features[:, sens_idx] = features[:, sens_idx]
-            features = norm_features
-
-        elif args.dataset == 'dblp':
-            dataset = 'dblp'
-            sens_attr = "gender"
-            predict_attr = "label"
-            path = "../dataset/dblp/"
-            # label_number = 1000
-            adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train = load_dblp(args.dataset,
-                                                                                                  sens_attr,
-                                                                                                  predict_attr,
-                                                                                                  path=path,
-                                                                                                  train_percent_atk=args.train_percent_atk,
-                                                                                                  train_percent_gnn=args.train_percent_gnn,
-                                                                                                  val_percent=args.val_percent,
-                                                                                                  sens_number=args.sens_number,
-                                                                                                  seed=seed)
+    elif args.dataset == 'dblp':
+        dataset = 'dblp'
+        sens_attr = "gender"
+        predict_attr = "label"
+        path = "../dataset/dblp/"
+        # label_number = 1000
+        adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train = load_dblp(args.dataset,
+                                                                                              sens_attr,
+                                                                                              predict_attr,
+                                                                                              path=path,
+                                                                                              train_percent_atk=args.train_percent_atk,
+                                                                                              train_percent_gnn=args.train_percent_gnn,
+                                                                                              val_percent=args.val_percent,
+                                                                                              sens_number=args.sens_number,
+                                                                                              seed=seed)
             # features = feature_norm(features)
             #  normalization may cause problem for dblp: model not converge
 
-        else:
-            print('Invalid dataset name!!')
-            exit(0)
+    else:
+        print('Invalid dataset name!!')
+        exit(0)
     return adj, features, labels, idx_train_atk, idx_train_gnn, idx_val, idx_test, sens, idx_sens_train, dataset, sens_attr, sens_number
 
 
@@ -182,47 +128,6 @@ def largest_connected_components(adj, n_components=1):
     ]
     print("Selecting {0} largest connected components".format(n_components))
     return nodes_to_keep
-
-def load_data(path="../dataset/cora/", dataset="cora"):
-    """Load citation network dataset (cora only for now)"""
-    print('Loading {} dataset...'.format(dataset))
-
-    idx_features_labels = np.genfromtxt("{}{}.content".format(path, dataset),
-                                        dtype=np.dtype(str))
-    features = sp.csr_matrix(idx_features_labels[:, 1:-1], dtype=np.float32)
-    labels = encode_onehot(idx_features_labels[:, -1])
-    print(labels)
-
-    # build graph
-    idx = np.array(idx_features_labels[:, 0], dtype=np.int32)
-    idx_map = {j: i for i, j in enumerate(idx)}
-    edges_unordered = np.genfromtxt("{}{}.cites".format(path, dataset),
-                                    dtype=np.int32)
-    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
-                     dtype=np.int32).reshape(edges_unordered.shape)
-    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]),
-                        dtype=np.float32)
-
-    # build symmetric adjacency matrix
-    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
-
-    # features = normalize(features)
-    adj = normalize(adj + sp.eye(adj.shape[0]))
-
-    idx_train = range(140)
-    idx_val = range(200, 500)
-    idx_test = range(500, 1500)
-
-    features = torch.FloatTensor(np.array(features.todense()))
-    labels = torch.LongTensor(np.where(labels)[1])
-    adj = sparse_mx_to_torch_sparse_tensor(adj)
-
-    idx_train = torch.LongTensor(idx_train)
-    idx_val = torch.LongTensor(idx_val)
-    idx_test = torch.LongTensor(idx_test)
-
-    return adj, features, labels, idx_train, idx_val, idx_test
 
 
 def fair_metric(labels, output, idx, sens, status):
@@ -842,307 +747,3 @@ def build_relationship(x, thresh=0.25):
     idx_map = np.array(idx_map)
 
     return idx_map
-
-
-def load_credit(
-        dataset,
-        sens_attr="Age",
-        predict_attr="NoDefaultNextMonth",
-        path="./dataset/credit/",
-        train_percent=0.5,
-        val_percent=0.25,
-        sens_number=200,
-        seed=20):
-    # print('Loading {} dataset from {}'.format(dataset, path))
-    idx_features_labels = pd.read_csv(
-        os.path.join(path, "{}.csv".format(dataset)))
-    header = list(idx_features_labels.columns)
-    header.remove(predict_attr)
-    header.remove('Single')
-
-    #    # Normalize MaxBillAmountOverLast6Months
-    #    idx_features_labels['MaxBillAmountOverLast6Months'] = (idx_features_labels['MaxBillAmountOverLast6Months']-idx_features_labels['MaxBillAmountOverLast6Months'].mean())/idx_features_labels['MaxBillAmountOverLast6Months'].std()
-    #
-    #    # Normalize MaxPaymentAmountOverLast6Months
-    #    idx_features_labels['MaxPaymentAmountOverLast6Months'] = (idx_features_labels['MaxPaymentAmountOverLast6Months'] - idx_features_labels['MaxPaymentAmountOverLast6Months'].mean())/idx_features_labels['MaxPaymentAmountOverLast6Months'].std()
-    #
-    #    # Normalize MostRecentBillAmount
-    #    idx_features_labels['MostRecentBillAmount'] = (idx_features_labels['MostRecentBillAmount']-idx_features_labels['MostRecentBillAmount'].mean())/idx_features_labels['MostRecentBillAmount'].std()
-    #
-    #    # Normalize MostRecentPaymentAmount
-    #    idx_features_labels['MostRecentPaymentAmount'] = (idx_features_labels['MostRecentPaymentAmount']-idx_features_labels['MostRecentPaymentAmount'].mean())/idx_features_labels['MostRecentPaymentAmount'].std()
-    #
-    #    # Normalize TotalMonthsOverdue
-    #    idx_features_labels['TotalMonthsOverdue'] = (idx_features_labels['TotalMonthsOverdue']-idx_features_labels['TotalMonthsOverdue'].mean())/idx_features_labels['TotalMonthsOverdue'].std()
-
-    # build relationship
-    if os.path.exists(f'{path}/{dataset}_edges.txt'):
-        edges_unordered = np.genfromtxt(
-            f'{path}/{dataset}_edges.txt').astype('int')
-    else:
-        edges_unordered = build_relationship(
-            idx_features_labels[header], thresh=0.7)
-        np.savetxt(f'{path}/{dataset}_edges.txt', edges_unordered)
-
-    features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
-    labels = idx_features_labels[predict_attr].values
-    idx = np.arange(features.shape[0])
-    idx_map = {j: i for i, j in enumerate(idx)}
-    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
-                     dtype=int).reshape(edges_unordered.shape)
-    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]),
-                        dtype=np.float32)
-
-    # build symmetric adjacency matrix
-    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
-
-
-    features = torch.FloatTensor(np.array(features.todense()))
-    labels = torch.LongTensor(labels)
-
-    import random
-    random.seed(seed)
-    label_idx = np.where(labels >= 0)[0]
-    random.shuffle(label_idx)
-    idx_train = label_idx[:int(train_percent * len(label_idx))]
-    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
-    idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
-    # label_idx_0 = np.where(labels == 0)[0]
-    # label_idx_1 = np.where(labels == 1)[0]
-    # random.shuffle(label_idx_0)
-    # random.shuffle(label_idx_1)
-    #
-    # idx_train = np.append(label_idx_0[:min(int(0.5 *
-    #                                            len(label_idx_0)), label_number //
-    #                                        2)], label_idx_1[:min(int(0.5 *
-    #                                                                  len(label_idx_1)), label_number //
-    #                                                              2)])
-    # idx_val = np.append(label_idx_0[int(0.5 *
-    #                                     len(label_idx_0)):int(0.75 *
-    #                                                           len(label_idx_0))], label_idx_1[int(0.5 *
-    #                                                                                               len(label_idx_1)):int(
-    #     0.75 *
-    #     len(label_idx_1))])
-    # idx_test = np.append(label_idx_0[int(
-    #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
-
-
-    sens = idx_features_labels[sens_attr].values.astype(int)
-    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
-    adj = adj + sp.eye(adj.shape[0])
-    sens_idx = set(np.where(sens >= 0)[0])
-    sens = torch.FloatTensor(sens)
-    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
-    random.seed(seed)
-    random.shuffle(idx_sens_train)
-    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
-    idx_train = torch.LongTensor(idx_train)
-    idx_val = torch.LongTensor(idx_val)
-    idx_test = torch.LongTensor(idx_test)
-
-    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train
-
-
-def load_bail(
-        dataset,
-        sens_attr="WHITE",
-        predict_attr="RECID",
-        path="../dataset/bail/",
-        train_percent=0.5,
-        val_percent=0.25,
-        sens_number=200,
-        seed=20):
-    # print('Loading {} dataset from {}'.format(dataset, path))
-    idx_features_labels = pd.read_csv(
-        os.path.join(path, "{}.csv".format(dataset)))
-    header = list(idx_features_labels.columns)
-    header.remove(predict_attr)
-
-    # # Normalize School
-    # idx_features_labels['SCHOOL'] = 2*(idx_features_labels['SCHOOL']-idx_features_labels['SCHOOL'].min()).div(idx_features_labels['SCHOOL'].max() - idx_features_labels['SCHOOL'].min()) - 1
-
-    # # Normalize RULE
-    # idx_features_labels['RULE'] = 2*(idx_features_labels['RULE']-idx_features_labels['RULE'].min()).div(idx_features_labels['RULE'].max() - idx_features_labels['RULE'].min()) - 1
-
-    # # Normalize AGE
-    # idx_features_labels['AGE'] = 2*(idx_features_labels['AGE']-idx_features_labels['AGE'].min()).div(idx_features_labels['AGE'].max() - idx_features_labels['AGE'].min()) - 1
-
-    # # Normalize TSERVD
-    # idx_features_labels['TSERVD'] = 2*(idx_features_labels['TSERVD']-idx_features_labels['TSERVD'].min()).div(idx_features_labels['TSERVD'].max() - idx_features_labels['TSERVD'].min()) - 1
-
-    # # Normalize FOLLOW
-    # idx_features_labels['FOLLOW'] = 2*(idx_features_labels['FOLLOW']-idx_features_labels['FOLLOW'].min()).div(idx_features_labels['FOLLOW'].max() - idx_features_labels['FOLLOW'].min()) - 1
-
-    # # Normalize TIME
-    # idx_features_labels['TIME'] = 2*(idx_features_labels['TIME']-idx_features_labels['TIME'].min()).div(idx_features_labels['TIME'].max() - idx_features_labels['TIME'].min()) - 1
-
-    # build relationship
-    if os.path.exists(f'{path}/{dataset}_edges.txt'):
-        edges_unordered = np.genfromtxt(
-            f'{path}/{dataset}_edges.txt').astype('int')
-    else:
-        edges_unordered = build_relationship(
-            idx_features_labels[header], thresh=0.6)
-        np.savetxt(f'{path}/{dataset}_edges.txt', edges_unordered)
-
-    features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
-    labels = idx_features_labels[predict_attr].values
-
-    idx = np.arange(features.shape[0])
-    idx_map = {j: i for i, j in enumerate(idx)}
-    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
-                     dtype=int).reshape(edges_unordered.shape)
-    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]),
-                        dtype=np.float32)
-
-    # build symmetric adjacency matrix
-    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
-
-    # features = normalize(features)
-
-
-    features = torch.FloatTensor(np.array(features.todense()))
-    labels = torch.LongTensor(labels)
-
-    import random
-    random.seed(seed)
-    label_idx = np.where(labels >= 0)[0]
-    random.shuffle(label_idx)
-    idx_train = label_idx[:int(train_percent * len(label_idx))]
-    idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
-    idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
-    # label_idx_0 = np.where(labels == 0)[0]
-    # label_idx_1 = np.where(labels == 1)[0]
-    # random.shuffle(label_idx_0)
-    # random.shuffle(label_idx_1)
-    # idx_train = np.append(label_idx_0[:min(int(0.5 *
-    #                                            len(label_idx_0)), label_number //
-    #                                        2)], label_idx_1[:min(int(0.5 *
-    #                                                                  len(label_idx_1)), label_number //
-    #                                                              2)])
-    # idx_val = np.append(label_idx_0[int(0.5 *
-    #                                     len(label_idx_0)):int(0.75 *
-    #                                                           len(label_idx_0))], label_idx_1[int(0.5 *
-    #                                                                                               len(label_idx_1)):int(
-    #     0.75 *
-    #     len(label_idx_1))])
-    # idx_test = np.append(label_idx_0[int(
-    #     0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
-
-    sens = idx_features_labels[sens_attr].values.astype(int)
-    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
-    adj = adj + sp.eye(adj.shape[0])
-    sens_idx = set(np.where(sens >= 0)[0])
-    sens = torch.FloatTensor(sens)
-    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
-    random.seed(seed)
-    random.shuffle(idx_sens_train)
-    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
-    idx_train = torch.LongTensor(idx_train)
-    idx_val = torch.LongTensor(idx_val)
-    idx_test = torch.LongTensor(idx_test)
-
-    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train
-
-
-def load_german(
-        dataset,
-        sens_attr="Gender",
-        predict_attr="GoodCustomer",
-        path="../dataset/german/",
-        train_percent=0.5,
-        val_percent=0.25,
-        sens_number=200,
-        seed=20):
-    label_number=100
-    # print('Loading {} dataset from {}'.format(dataset, path))
-    idx_features_labels = pd.read_csv(
-        os.path.join(path, "{}.csv".format(dataset)))
-    header = list(idx_features_labels.columns)
-    header.remove(predict_attr)
-    header.remove('OtherLoansAtStore')
-    header.remove('PurposeOfLoan')
-
-    # Sensitive Attribute
-    idx_features_labels['Gender'][idx_features_labels['Gender']
-                                  == 'Female'] = 1
-    idx_features_labels['Gender'][idx_features_labels['Gender'] == 'Male'] = 0
-
-    #    for i in range(idx_features_labels['PurposeOfLoan'].unique().shape[0]):
-    #        val = idx_features_labels['PurposeOfLoan'].unique()[i]
-    #        idx_features_labels['PurposeOfLoan'][idx_features_labels['PurposeOfLoan'] == val] = i
-
-    #    # Normalize LoanAmount
-    #    idx_features_labels['LoanAmount'] = 2*(idx_features_labels['LoanAmount']-idx_features_labels['LoanAmount'].min()).div(idx_features_labels['LoanAmount'].max() - idx_features_labels['LoanAmount'].min()) - 1
-    #
-    #    # Normalize Age
-    #    idx_features_labels['Age'] = 2*(idx_features_labels['Age']-idx_features_labels['Age'].min()).div(idx_features_labels['Age'].max() - idx_features_labels['Age'].min()) - 1
-    #
-    #    # Normalize LoanDuration
-    #    idx_features_labels['LoanDuration'] = 2*(idx_features_labels['LoanDuration']-idx_features_labels['LoanDuration'].min()).div(idx_features_labels['LoanDuration'].max() - idx_features_labels['LoanDuration'].min()) - 1
-    #
-    # build relationship
-    if os.path.exists(f'{path}/{dataset}_edges.txt'):
-        edges_unordered = np.genfromtxt(
-            f'{path}/{dataset}_edges.txt').astype('int')
-    else:
-        edges_unordered = build_relationship(
-            idx_features_labels[header], thresh=0.8)
-        np.savetxt(f'{path}/{dataset}_edges.txt', edges_unordered)
-
-    features = sp.csr_matrix(idx_features_labels[header], dtype=np.float32)
-    labels = idx_features_labels[predict_attr].values
-    labels[labels == -1] = 0
-
-    idx = np.arange(features.shape[0])
-    idx_map = {j: i for i, j in enumerate(idx)}
-    edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
-                     dtype=int).reshape(edges_unordered.shape)
-    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]),
-                        dtype=np.float32)
-    # build symmetric adjacency matrix
-    adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
-
-
-
-    features = torch.FloatTensor(np.array(features.todense()))
-    labels = torch.LongTensor(labels)
-
-    import random
-    random.seed(seed)
-    # ---
-    # label_idx = np.where(labels >= 0)[0]
-    # random.shuffle(label_idx)
-    # idx_train = label_idx[:int(train_percent * len(label_idx))]
-    # idx_val = label_idx[int(train_percent * len(label_idx)):int((train_percent + val_percent) * len(label_idx))]
-    # idx_test = label_idx[int((train_percent + val_percent) * len(label_idx)):]
-    # ---
-    label_idx_0 = np.where(labels == 0)[0]
-    label_idx_1 = np.where(labels == 1)[0]
-    random.shuffle(label_idx_0)
-    random.shuffle(label_idx_1)
-    label_idx_1=label_idx_1[:len(label_idx_0)]  # make train set balance
-
-    idx_train = np.append(label_idx_0[:int(0.5 * len(label_idx_0))],
-                          label_idx_1[:int(0.5 * len(label_idx_1))])
-    idx_val = np.append(label_idx_0[int(0.5 * len(label_idx_0)):int(0.75 * len(label_idx_0))],
-                        label_idx_1[int(0.5 * len(label_idx_1)):int(0.75 * len(label_idx_1))])
-    idx_test = np.append(label_idx_0[int(0.75 * len(label_idx_0)):], label_idx_1[int(0.75 * len(label_idx_1)):])
-
-    sens = idx_features_labels[sens_attr].values.astype(int)
-    check_dataset(dataset,adj,labels, sens, idx_train, idx_val, idx_test)
-    adj = adj + sp.eye(adj.shape[0])
-    sens_idx = set(np.where(sens >= 0)[0])
-    sens = torch.FloatTensor(sens)
-    idx_sens_train = list(sens_idx - set(idx_val) - set(idx_test))
-    random.seed(seed)
-    random.shuffle(idx_sens_train)
-    idx_sens_train = torch.LongTensor(idx_sens_train[:sens_number])
-    idx_train = torch.LongTensor(idx_train)
-    idx_val = torch.LongTensor(idx_val)
-    idx_test = torch.LongTensor(idx_test)
-
-    return adj, features, labels, idx_train, idx_val, idx_test, sens, idx_sens_train
