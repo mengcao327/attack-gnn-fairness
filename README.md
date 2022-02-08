@@ -1,5 +1,5 @@
-# Fairness Attacks on Graph Neural Networks
-This repository contains the source code for our paper "Fairness Attacks on Graph Neural Networks" submitted to KDD'22.
+# Fairness Attacks on the Fairness of Graph Neural Networks
+This repository contains the source code for our paper "Fairness Attacks on the Fairness of Graph Neural Networks" submitted to KDD'22.
 
 ## Setup
 This repository is built using PyTorch. We ran our code using Python == 3.9. You can install all the necessary libraries by running
