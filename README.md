@@ -1,4 +1,4 @@
-# Fairness Attacks on the Fairness of Graph Neural Networks
+# Adversarial Attacks on the Fairness of Graph Neural Networks
 This repository contains the source code for our paper "Fairness Attacks on the Fairness of Graph Neural Networks" submitted to KDD'22.
 
 ## Setup
