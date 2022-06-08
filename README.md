@@ -2,8 +2,19 @@
 This repository contains the source code for our paper "Adversarial Inter-Group Link Injection Leads to Unfair Graph Neural Networks" submitted to ICDM'22.
 
 ## Setup
-This repository is built using PyTorch. We ran our code using Python == 3.9. You can install all the necessary libraries by running
+This repository is built using PyTorch. The primary dependencies are listed as follows. You can install all the necessary libraries by running
 `pip install -r ./requirements.txt`
+
+### Dependencies
+- Python == 3.9
+- torch == 1.9.0
+- cuda == 11.5
+- numpy == 1.20.3
+- scipy == 1.5.4
+- networkx == 2.6.2
+- dgl == 0.7.0
+- deeprobust == 0.2.2
+- scikit-learn == 0.24.2
 
 
 ## Datasets
@@ -48,3 +59,12 @@ The following Figure A.1 shows the statistical parity difference and the error r
 On random graphs, we generally see similar results, except that error rates do not go up with same-class linking (ED/EE).
 We leave out the detailed results here.
 
+## Appendix B: model implementations
+### GNN models
+- GCN, GAT, and GraphSAGE: we adopt the implementations provided in the DGL package (https://github.com/dmlc/dgl/). 
+- FairGNN: we adopt the implementation provided by the authors (https://github.com/EnyanDai/FairGNN).
+- NIFTY: we adopt the implementation provided by the authors (https://github.com/chirag126/nifty).
+
+### Graph Attack Baselines
+- Random and DICE: we adopt the implementation provided in the deeprobust package (https://github.com/DSE-MSU/DeepRobust). 
+- PR-BCD: we use the implementation provided by the authors (https://github.com/sigeisler/robustness_of_gnns_at_scale).
