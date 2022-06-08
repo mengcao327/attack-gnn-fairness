@@ -1,5 +1,5 @@
 # Adversarial Attacks on the Fairness of Graph Neural Networks
-This repository contains the source code for our paper "Fairness Attacks on the Fairness of Graph Neural Networks" submitted to KDD'22.
+This repository contains the source code for our paper "Adversarial Inter-Group Link Injection Leads to Unfair Graph Neural Networks" submitted to ICDM'22.
 
 ## Setup
 This repository is built using PyTorch. We ran our code using Python == 3.9. You can install all the necessary libraries by running
@@ -31,3 +31,20 @@ Script 3: Evaluate fairness and node classification performance of GAT on the pe
 
 ### Outputs
 The main script will output the fairness and classification metrics for each of the 5 random seeds as well as the mean and std values, the results will also be saved in a .csv file in the './results/' folder.
+
+## Appendix A: supplementary experiments on heterophilic and random graphs
+
+### Results on heterophilic graphs
+We perform the same experiments on synthetic datasets described in Sectio 3.4. We start with a heterophilic graph: the edge density is $0.0016$ for subsets of the same class and $0.004$ for subsets of opposite classes. 
+
+The following Figure A.1 shows the statistical parity difference and the error rates of this simulation and supports our hypotheses. In this setup, EE only shows an increase in $FNR_{s_1}$ at the beginning. This could be due to $y_1s_1$ obtaining a similar neighborhood distribution to one subset and then gaining its unique neighborhood distribution.
+
+![repo-het-result](https://user-images.githubusercontent.com/13431345/172593537-14ee234d-2ed7-4d4b-9b81-09746bd4ed8b.jpg)
+<!-- <img src="https://user-images.githubusercontent.com/13431345/172593537-14ee234d-2ed7-4d4b-9b81-09746bd4ed8b.jpg" width="800"> -->
+**Figure A.1** Fairness attacks on heterophilic synthetic graph. We show the statistical parity difference ($SPD$) (top) and error rates (bottom) of FA-GNN strategies on heterophilic synthetic graph. **(Top)** Each figure corresponds to a linking strategy applied on subset $y_1s_1$.% in a synthetic heterophilic graph While DE and ED do not have a targeted influence on $SPD$, DD decreases $SPD$, and EE only increases it at the beginning. **(Bottom)** $FPR_{s_j}$ and $FNR_{s_j}$ are the false positive and negative rates on subset $s_j$. Attacks that decrease label homophily (DD and DE) \textit{decrease} error on the involved subsets ($FNR_{s_1}, FPR_{s_0}$ with DD and $FNR_{s_1},FPR_{s_1}$ with DE). Attacks that increase label homophily (ED and EE) \textit{increase} the error rates on the involved subsets ($FNR_{s_1},FNR_{s_0}$ with ED and $FNR_{s_1}$ with EE at the beginning). This shows that for heterophilic graphs, DD and EE are still effective attacks.
+
+
+### Results on random graphs
+On random graphs, we generally see similar results, except that error rates do not go up with same-class linking (ED/EE).
+We leave out the detailed results here.
+
