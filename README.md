@@ -1,4 +1,4 @@
-# Adversarial Attacks on the Fairness of Graph Neural Networks
+# Adversarial Inter-Group Link Injection Leads to Unfair Graph Neural Networks
 This repository contains the source code for our paper "Adversarial Inter-Group Link Injection Leads to Unfair Graph Neural Networks" submitted to ICDM'22.
 
 ## Setup
