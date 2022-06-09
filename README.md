@@ -68,3 +68,10 @@ We leave out the detailed results here.
 ### Graph Attack Baselines
 - Random and DICE: we adopt the implementation provided in the deeprobust package (https://github.com/DSE-MSU/DeepRobust). 
 - PR-BCD: we use the implementation provided by the authors (https://github.com/sigeisler/robustness_of_gnns_at_scale).
+
+### Hyperparameters
+- The hyperparameters $\alpha$ and $\beta$ in FairGNN for balancing the loss functions are set to 2 and 0.1, respectively.
+- For the victim GNN model training, we randomly pick 50\%, 25\%, 25\% of labeled nodes as training set, validation set, and testing set.
+- We train all GNN models both on the clean networks and attacked networks with a learning rate of 0.001.
+- For GAT on Pokec datasets, we use a dropout of 0.8 and a weight decay of 1.9e-2, for all the other models, we set dropout as 0.6, and weight decay as 5e-4.
+- For the surrogate GCN, we use two hidden layers with 16 dimensions for the first hidden layer, and we train the model for 500 epochs with a learning rate 0.01, weight decay 5e-4, and droupout 0.5.
