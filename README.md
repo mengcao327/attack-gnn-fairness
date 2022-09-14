@@ -1,6 +1,8 @@
 # Adversarial Inter-Group Link Injection Degrades the Fairness of Graph Neural Networks
 This repository contains the source code for our paper "Adversarial Inter-Group Link Injection Degrades the Fairness of Graph Neural Networks" accepted by ICDM'22.
 
+[[Preprint]](https://arxiv.org/abs/2209.05957)
+
 ## Setup
 This repository is built using PyTorch. The primary dependencies are listed as follows. You can install all the necessary libraries by running
 `pip install -r ./requirements.txt`
